@@ -10,21 +10,28 @@ const useStyles = makeStyles({
     flexDirection: "column",
     alignItems: "center",
     width: "100%",
+    maxWidth: "300px",
     padding: "20px",
+    boxSizing: "border-box",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
   },
   title: {
     fontSize: "24px",
     fontWeight: "bold",
     marginBottom: "20px",
+    textAlign: "center",
+    color: "#333",
   },
   button: {
     minWidth: "200px",
     height: "40px",
-    marginTop: "20px", // Add some space above the button
+    marginTop: "20px",
   },
   buttonText: {
     textAlign: "center",
-    width: "100%", // Ensure the text takes up the full width of the button
+    width: "100%",
   },
 });
 
@@ -60,7 +67,7 @@ const EmailGenerator = () => {
   return (
     <div className={styles.container}>
       <Text className={styles.title}>Compose with AI</Text>
-      <Button
+      <Button 
         appearance="primary"
         className={styles.button}
         disabled={isLoading}

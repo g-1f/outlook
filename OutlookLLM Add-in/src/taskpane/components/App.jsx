@@ -7,14 +7,19 @@ const useStyles = makeStyles({
     height: "100vh",
     display: "flex",
     flexDirection: "column",
-    backgroundColor: "#f3f2f1",
+    backgroundColor: "#f0f0f0",
+    backgroundImage: "linear-gradient(to bottom, #f5f5f5, #e0e0e0)",
+    overflowX: "hidden",
+    overflowY: "auto",
   },
   content: {
     flex: 1,
     display: "flex",
-    justifyContent: "flex-start", // Changed from center to flex-start
-    alignItems: "center",
-    paddingTop: "20px", // Add some padding at the top
+    justifyContent: "center",
+    alignItems: "flex-start",
+    padding: "20px 0",
+    boxSizing: "border-box",
+    width: "100%",
   },
 });
 
