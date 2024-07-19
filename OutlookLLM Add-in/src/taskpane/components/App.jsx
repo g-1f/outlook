@@ -1,6 +1,6 @@
 import * as React from "react";
 import EmailGenerator from "./EmailGenerator";
-import { makeStyles } from "@fluentui/react-components";
+import { makeStyles, shorthands } from "@fluentui/react-components";
 
 const useStyles = makeStyles({
   root: {
@@ -8,10 +8,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     backgroundColor: "#f3f2f1",
-    // Add this to hide the Outlook-provided header
-    "& > div:first-child": {
-      display: "none !important",
-    },
+    ...shorthands.overflow("hidden"),
   },
   header: {
     backgroundColor: "#0078d4",
@@ -26,6 +23,16 @@ const useStyles = makeStyles({
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
+  },
+  // Add this new style
+  "@global": {
+    ".ms-CommandBar": {
+      display: "none !important",
+    },
+    // This targets the parent of our app container
+    "#content-main": {
+      ...shorthands.padding("0", "!important"),
+    },
   },
 });
 
