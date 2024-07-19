@@ -9,18 +9,12 @@ const useStyles = makeStyles({
     flexDirection: "column",
     backgroundColor: "#f3f2f1",
   },
-  header: {
-    backgroundColor: "#0078d4",
-    color: "#ffffff",
-    padding: "12px 20px",
-    fontSize: "18px",
-    fontWeight: "bold",
-  },
   content: {
     flex: 1,
     display: "flex",
-    justifyContent: "center",
+    justifyContent: "flex-start", // Changed from center to flex-start
     alignItems: "center",
+    paddingTop: "20px", // Add some padding at the top
   },
 });
 
@@ -29,9 +23,6 @@ const App = () => {
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        OutlookLLM
-      </header>
       <main className={styles.content}>
         <EmailGenerator />
       </main>

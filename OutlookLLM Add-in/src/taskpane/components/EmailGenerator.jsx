@@ -9,23 +9,22 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
+    width: "100%",
     padding: "20px",
-    textAlign: "center",
-    height: "100%",
   },
   title: {
     fontSize: "24px",
     fontWeight: "bold",
-    marginBottom: "16px",
-  },
-  description: {
-    fontSize: "14px",
-    marginBottom: "24px",
-    maxWidth: "300px",
+    marginBottom: "20px",
   },
   button: {
     minWidth: "200px",
+    height: "40px",
+    marginTop: "20px", // Add some space above the button
+  },
+  buttonText: {
+    textAlign: "center",
+    width: "100%", // Ensure the text takes up the full width of the button
   },
 });
 
@@ -60,10 +59,7 @@ const EmailGenerator = () => {
 
   return (
     <div className={styles.container}>
-      <Text className={styles.title}>AI Email Composer</Text>
-      <Text className={styles.description}>
-        Click the button below to generate a professional email using AI.
-      </Text>
+      <Text className={styles.title}>Compose with AI</Text>
       <Button
         appearance="primary"
         className={styles.button}
@@ -71,7 +67,9 @@ const EmailGenerator = () => {
         onClick={handleGenerateEmail}
         icon={<SendRegular />}
       >
-        {isLoading ? <Spinner size="tiny" /> : "Generate Email"}
+        <span className={styles.buttonText}>
+          {isLoading ? <Spinner size="tiny" /> : "Generate Email"}
+        </span>
       </Button>
     </div>
   );
