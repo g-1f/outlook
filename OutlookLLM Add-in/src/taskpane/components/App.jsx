@@ -24,20 +24,46 @@ const useStyles = makeStyles({
     justifyContent: "center",
     alignItems: "center",
   },
-  // Add this new style
   "@global": {
-    ".ms-CommandBar": {
+    // Hide Outlook's header
+    '[role="heading"]': {
       display: "none !important",
     },
-    // This targets the parent of our app container
-    "#content-main": {
+    // Hide any potential command bar
+    '.ms-CommandBar': {
+      display: "none !important",
+    },
+    // Adjust padding of the main content area
+    '#content-main': {
       ...shorthands.padding("0", "!important"),
+    },
+    // Hide any other Outlook-provided headers
+    'div[class^="ms-"], div[class*=" ms-"]': {
+      '&:not(#container)': {
+        display: "none !important",
+      }
+    },
+    // Ensure our container takes full height
+    '#container': {
+      height: "100vh !important",
+      ...shorthands.overflow("hidden"),
     },
   },
 });
 
 const App = () => {
   const styles = useStyles();
+
+  React.useEffect(() => {
+    // This will run after the component mounts
+    const style = document.createElement('style');
+    style.textContent = `
+      body > div:first-child { display: none !important; }
+      #content-main { padding: 0 !important; }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   return (
     <div className={styles.root}>
