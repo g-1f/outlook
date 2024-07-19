@@ -44,23 +44,11 @@ const EmailGenerator = () => {
   useEffect(() => {
     const fetchUserConfig = async () => {
       try {
-        console.log('Fetching user configuration...');
-        const response = await fetch("http://localhost:8000/getUserConfig");
-        
+        const response = await fetch("https://localhost:8385/getUserConfig");
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Server responded with ${response.status}: ${errorText}`);
-          throw new Error(`Failed to fetch user configuration: ${response.statusText}`);
+          throw new Error("Failed to fetch user configuration");
         }
-  
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          console.error(`Received non-JSON response: ${contentType}`);
-          throw new Error("Received non-JSON response from server");
-        }
-  
         const data = await response.json();
-        console.log('Received user configuration:', data);
         setUserConfig(data);
       } catch (error) {
         console.error("Error fetching user configuration:", error);
@@ -69,7 +57,7 @@ const EmailGenerator = () => {
         setIsLoading(false);
       }
     };
-  
+
     fetchUserConfig();
   }, []);
 

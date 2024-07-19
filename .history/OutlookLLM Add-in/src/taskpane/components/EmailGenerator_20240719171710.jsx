@@ -59,16 +59,13 @@ user_configs = {
     },
 }
 
-
 class EmailRequest(BaseModel):
     userId: str
-
 
 @app.get("/getUserId")
 async def get_user_id():
     logger.info("Received request for getUserId")
     return {"userId": "user1"}
-
 
 @app.get("/getUserConfig")
 async def get_user_config():
@@ -82,7 +79,6 @@ async def get_user_config():
         logger.error(f"Error in getUserConfig: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/generate_email")
 async def generate_email(request: EmailRequest):
     logger.info(f"Received generate_email request for user: {request.userId}")
@@ -92,18 +88,15 @@ async def generate_email(request: EmailRequest):
         logger.error(f"Error in generate_email: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/summarize_email")
 async def summarize_email(request: EmailRequest):
     logger.info(f"Received summarize_email request for user: {request.userId}")
     return {"body": f"Summarized email for user {request.userId}"}
 
-
 @app.post("/ai_assistant")
 async def ai_assistant(request: EmailRequest):
     logger.info(f"Received ai_assistant request for user: {request.userId}")
     return {"body": f"AI Assistant response for user {request.userId}"}
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -1,15 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict
 import uvicorn
-import logging
 
 app = FastAPI()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Enable CORS
 app.add_middleware(
@@ -28,12 +23,12 @@ user_configs = {
             {
                 "label": "Generate Email",
                 "icon": "SendRegular",
-                "apiEndpoint": "http://localhost:8001/generate_email",
+                "apiEndpoint": "https://localhost:8000/generate_email",
             },
             {
                 "label": "Summarize Email",
                 "icon": "SummarizeRegular",
-                "apiEndpoint": "http://localhost:8001/summarize_email",
+                "apiEndpoint": "https://localhost:8000/summarize_email",
             },
         ],
     },
@@ -43,7 +38,7 @@ user_configs = {
             {
                 "label": "Generate Email",
                 "icon": "SendRegular",
-                "apiEndpoint": "http://localhost:8001/generate_email",
+                "apiEndpoint": "https://localhost:8000/generate_email",
             }
         ],
     },
@@ -53,7 +48,7 @@ user_configs = {
             {
                 "label": "AI Assistant",
                 "icon": "QuestionCircleRegular",
-                "apiEndpoint": "http://localhost:8001/ai_assistant",
+                "apiEndpoint": "https://localhost:8000/ai_assistant",
             }
         ],
     },
@@ -66,44 +61,41 @@ class EmailRequest(BaseModel):
 
 @app.get("/getUserId")
 async def get_user_id():
-    logger.info("Received request for getUserId")
+    # In a real application, this would be determined by authentication
     return {"userId": "user1"}
 
 
 @app.get("/getUserConfig")
 async def get_user_config():
-    logger.info("Received request for getUserConfig")
     try:
+        # In a real application, you'd get the user ID from the session or token
         user_id = "user1"
         config = user_configs.get(user_id, user_configs["default"])
-        logger.info(f"Returning config for user: {user_id}")
         return JSONResponse(content=config)
     except Exception as e:
-        logger.error(f"Error in getUserConfig: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/generate_email")
 async def generate_email(request: EmailRequest):
-    logger.info(f"Received generate_email request for user: {request.userId}")
     try:
+        # Your email generation logic here
         return {"body": f"Generated email for user {request.userId}"}
     except Exception as e:
-        logger.error(f"Error in generate_email: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/summarize_email")
 async def summarize_email(request: EmailRequest):
-    logger.info(f"Received summarize_email request for user: {request.userId}")
+    # Implement your email summarization logic here
     return {"body": f"Summarized email for user {request.userId}"}
 
 
 @app.post("/ai_assistant")
 async def ai_assistant(request: EmailRequest):
-    logger.info(f"Received ai_assistant request for user: {request.userId}")
+    # Implement your AI assistant logic here
     return {"body": f"AI Assistant response for user {request.userId}"}
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
