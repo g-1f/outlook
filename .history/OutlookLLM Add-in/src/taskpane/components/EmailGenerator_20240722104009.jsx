@@ -215,4 +215,4 @@ const EmailGenerator = () => {
   );
 };
 
-export default EmailGenerator;
+export default EmailGenerator;s
