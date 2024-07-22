@@ -14,8 +14,6 @@ import {
   Avatar
 } from "@fluentui/react-components";
 import IconComponent from "./IconComponent";
-import * as FluentIcons from "@fluentui/react-icons";
-
 
 const useStyles = makeStyles({
   container: {
