@@ -57,7 +57,6 @@ user_configs = {
                 "label": "AI Assistant",
                 "icon": "QuestionCircleRegular",
                 "apiEndpoint": "http://localhost:8001/ai_assistant",
-                "description": "AI will generate a complete email based on the current context.",
             }
         ],
     },
