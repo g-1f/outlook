@@ -192,12 +192,10 @@ const EmailGenerator = ({ userId = "user1" }) => {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const responseData = await response.json();
-
-      const htmlContent = wrapInHtml(responseData.generatedContent);
-
-      // Create a reply to all recipients with the formatted content
+      
+      // Create a reply to all recipients
       Office.context.mailbox.item.displayReplyAllForm({
-        htmlBody: htmlContent,
+        htmlBody: responseData.generatedContent,
       });
 
       setStatusMessage("Reply All created with generated content!");

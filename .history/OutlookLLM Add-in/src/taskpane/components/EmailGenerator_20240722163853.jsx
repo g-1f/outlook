@@ -192,7 +192,7 @@ const EmailGenerator = ({ userId = "user1" }) => {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const responseData = await response.json();
-
+      
       const htmlContent = wrapInHtml(responseData.generatedContent);
 
       // Create a reply to all recipients with the formatted content
