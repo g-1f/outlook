@@ -120,14 +120,14 @@ const EmailGenerator = ({ userId = "user1" }) => {  // Add userId prop with defa
           'Accept': 'application/json',
         },
       });
-
+      
       console.log("Response status:", response.status);
-
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
-
+      
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Oops! We haven't received a JSON response");
@@ -135,7 +135,7 @@ const EmailGenerator = ({ userId = "user1" }) => {  // Add userId prop with defa
 
       const data = await response.json();
       console.log("Received user configuration:", data);
-
+      
       if (!data || !data.buttons) {
         throw new Error("Invalid user configuration received");
       }
