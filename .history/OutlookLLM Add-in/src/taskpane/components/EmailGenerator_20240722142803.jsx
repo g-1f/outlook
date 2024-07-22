@@ -33,7 +33,7 @@ const useStyles = makeStyles({
     marginBottom: "16px",
   },
   title: {
-    fontSize: tokens.fontSizeBase500,
+    fontSize: tokens.fontSizeBase600,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
   },
@@ -60,20 +60,20 @@ const useStyles = makeStyles({
     minWidth: "120px",
     height: "40px",
     ...shorthands.padding("0", "16px"),
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase400,
     fontWeight: tokens.fontWeightSemibold,
   },
   tooltip: {
     maxWidth: "300px",
     textAlign: "center",
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase400,
   },
   emailContentContainer: {
     flex: 1,
     overflowY: "auto",
   },
   emailContent: {
-    backgroundColor: tokens.colorNeutralForeground2,
+    backgroundColor: tokens.colorNeutralBackground1,
     borderRadius: tokens.borderRadiusMedium,
     boxShadow: tokens.shadow4,
   },
@@ -83,13 +83,13 @@ const useStyles = makeStyles({
   emailText: {
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase400,
   },
   errorText: {
     color: tokens.colorPaletteRedForeground1,
     textAlign: "center",
     padding: "16px",
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase400,
   },
   spinnerContainer: {
     display: "flex",

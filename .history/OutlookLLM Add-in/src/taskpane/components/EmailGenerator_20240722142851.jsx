@@ -33,7 +33,7 @@ const useStyles = makeStyles({
     marginBottom: "16px",
   },
   title: {
-    fontSize: tokens.fontSizeBase500,
+    fontSize: tokens.fontSizeBase600,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
   },
@@ -60,7 +60,7 @@ const useStyles = makeStyles({
     minWidth: "120px",
     height: "40px",
     ...shorthands.padding("0", "16px"),
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase400,
     fontWeight: tokens.fontWeightSemibold,
   },
   tooltip: {
