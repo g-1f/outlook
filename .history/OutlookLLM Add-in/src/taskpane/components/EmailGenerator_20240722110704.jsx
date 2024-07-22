@@ -91,8 +91,7 @@ const EmailGenerator = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [userConfig, setUserConfig] = useState(null);
   const [error, setError] = useState(null);
-  const [originalContent, setOriginalContent] = useState(null);
-  const [generatedContent, setGeneratedContent] = useState(null);
+  const [emailContent, setEmailContent] = useState(null);
 
   useEffect(() => {
     const fetchUserConfig = async () => {
@@ -127,8 +126,7 @@ const EmailGenerator = () => {
   const handleButtonClick = async (buttonConfig) => {
     setIsProcessing(true);
     setError(null);
-    setOriginalContent(null);
-    setGeneratedContent(null);
+    setEmailContent(null);
     try {
       const content = await getEmailContent();
       const response = await fetch(buttonConfig.apiEndpoint, {
@@ -138,8 +136,7 @@ const EmailGenerator = () => {
       });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const responseData = await response.json();
-      setOriginalContent(responseData.originalContent);
-      setGeneratedContent(responseData.generatedContent);
+      setEmailContent(responseData.originalContent);
     } catch (e) {
       console.error(`Error in handleButtonClick: ${e.message}`);
       setError(`Failed to ${buttonConfig.label.toLowerCase()}. Please try again.`);

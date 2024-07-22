@@ -91,8 +91,7 @@ const EmailGenerator = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [userConfig, setUserConfig] = useState(null);
   const [error, setError] = useState(null);
-  const [originalContent, setOriginalContent] = useState(null);
-  const [generatedContent, setGeneratedContent] = useState(null);
+  const [emailContent, setEmailContent] = useState(null);
 
   useEffect(() => {
     const fetchUserConfig = async () => {
