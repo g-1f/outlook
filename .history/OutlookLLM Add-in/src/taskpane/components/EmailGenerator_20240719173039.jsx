@@ -2,6 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { Button, Text, Spinner, makeStyles } from "@fluentui/react-components";
 import * as FluentIcons from "@fluentui/react-icons";
+import insertText from "../office-document";
 
 const useStyles = makeStyles({
   container: {
@@ -32,30 +33,19 @@ const useStyles = makeStyles({
     textAlign: "center",
     width: "100%",
   },
-  emailContent: {
-    marginTop: "20px",
-    width: "100%",
-    textAlign: "left",
-    maxHeight: "300px",
-    overflowY: "auto",
-    padding: "10px",
-    border: "1px solid #ddd",
-    borderRadius: "4px",
-  },
 });
 
 const EmailGenerator = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [userConfig, setUserConfig] = useState(null);
   const [error, setError] = useState(null);
-  const [emailContent, setEmailContent] = useState(null);
   const styles = useStyles();
 
   useEffect(() => {
     const fetchUserConfig = async () => {
       try {
         console.log('Fetching user configuration...');
-        const response = await fetch("http://localhost:8001/getUserConfig");
+        const response = await fetch("http://localhost:8000/getUserConfig");
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -83,35 +73,18 @@ const EmailGenerator = () => {
     fetchUserConfig();
   }, []);
 
-  const getEmailContent = async () => {
-    return new Promise((resolve, reject) => {
-      Office.context.mailbox.item.body.getAsync(Office.CoercionType.Text, (result) => {
-        if (result.status === Office.AsyncResultStatus.Succeeded) {
-          resolve(result.value);
-        } else {
-          reject(new Error(result.error.message));
-        }
-      });
-    });
-  };
-
   const handleButtonClick = async (buttonConfig) => {
     setIsLoading(true);
-    setError(null);
-    setEmailContent(null);
     try {
-      const content = await getEmailContent();
       console.log(`Sending request to: ${buttonConfig.apiEndpoint}`);
-      
+      console.log(`Request payload: ${JSON.stringify({ userId: userConfig.userId })}`);
+  
       const response = await fetch(buttonConfig.apiEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
-          userId: userConfig.userId,
-          emailContent: content
-        }),
+        body: JSON.stringify({ userId: userConfig.userId }),
       });
   
       if (!response.ok) {
@@ -120,10 +93,9 @@ const EmailGenerator = () => {
         throw new Error(`Failed to ${buttonConfig.label.toLowerCase()}`);
       }
   
-      const responseData = await response.json();
-      console.log(`Received response:`, responseData);
-      
-      setEmailContent(responseData.originalContent);
+      const textContent = await response.json();
+      console.log(`Received response: ${JSON.stringify(textContent)}`);
+      await insertText(textContent, true);
     } catch (error) {
       console.error(`Error in handleButtonClick: ${error.message}`);
       setError(`Failed to ${buttonConfig.label.toLowerCase()}. Please try again.`);
@@ -164,12 +136,6 @@ const EmailGenerator = () => {
           </Button>
         );
       })}
-      {error && <Text style={{ color: 'red', marginTop: '10px' }}>{error}</Text>}
-      {emailContent && (
-        <div className={styles.emailContent}>
-          <Text>{emailContent}</Text>
-        </div>
-      )}
     </div>
   );
 };

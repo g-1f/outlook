@@ -89,13 +89,11 @@ async def get_user_config():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/generate_email", response_model=EmailResponse)
+@app.post("/generate_email")
 async def generate_email(request: EmailRequest):
     logger.info(f"Received generate_email request for user: {request.userId}")
     try:
-        # For now, we're just echoing back the original content
-        # Later, we'll add LLM processing here
-        return EmailResponse(originalContent=request.emailContent)
+        return {"body": f"Generated email for user {request.userId}"}
     except Exception as e:
         logger.error(f"Error in generate_email: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
