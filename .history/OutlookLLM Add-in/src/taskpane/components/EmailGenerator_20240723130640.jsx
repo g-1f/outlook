@@ -33,20 +33,20 @@ const useStyles = makeStyles({
     marginBottom: "16px",
   },
   title: {
-    fontSize: tokens.fontSizeBase600,
+    fontSize: tokens.fontSizeBase500,
     fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground1,
+    color: tokens.colorNeutralForeground2,
   },
   content: {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
     flex: 1,
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: tokens.borderRadiusMedium,
     ...shorthands.padding("16px"),
     boxShadow: tokens.shadow4,
-    overflow: "auto",
+    overflow: "hidden",
   },
   buttonsContainer: {
     display: "flex",
@@ -57,7 +57,7 @@ const useStyles = makeStyles({
     marginBottom: "16px",
   },
   button: {
-    minWidth: "140px",
+    minWidth: "120px",
     height: "40px",
     ...shorthands.padding("0", "16px"),
     fontSize: tokens.fontSizeBase300,
@@ -85,29 +85,29 @@ const useStyles = makeStyles({
     alignItems: "center",
     padding: "16px",
   },
-  inputCard: {
-    padding: "16px",
-  },
-  input: {
+  summaryInput: {
     marginBottom: "16px",
+  },
+  summaryCard: {
+    padding: "16px",
   },
 });
 
-const InputCard = ({ title, onSubmit, onCancel }) => {
+const SummaryInput = ({ onSubmit, onCancel }) => {
   const styles = useStyles();
-  const [inputValue, setInputValue] = useState("");
+  const [prompt, setPrompt] = useState("");
 
   return (
-    <Card className={styles.inputCard}>
-      <CardHeader header={<Text weight="semibold">{title}</Text>} />
+    <Card className={styles.summaryCard}>
+      <CardHeader header={<Text weight="semibold">Summarize Email</Text>} />
       <Input
-        className={styles.input}
-        placeholder="Enter your prompt here..."
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
+        className={styles.summaryInput}
+        placeholder="Enter your summary prompt here..."
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
       />
       <div className={styles.buttonsContainer}>
-        <Button appearance="primary" onClick={() => onSubmit(inputValue)}>Send</Button>
+        <Button appearance="primary" onClick={() => onSubmit(prompt)}>Send</Button>
         <Button appearance="secondary" onClick={onCancel}>Cancel</Button>
       </div>
     </Card>
@@ -121,16 +121,38 @@ const EmailGenerator = ({ userId = "user1" }) => {
   const [userConfig, setUserConfig] = useState(null);
   const [error, setError] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
-  const [currentView, setCurrentView] = useState("main");
-  const [selectedAction, setSelectedAction] = useState(null);
 
   const fetchUserConfig = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:8001/getUserConfig/${userId}`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      console.log(`Fetching user configuration for user: ${userId}`);
+      const response = await fetch(`http://localhost:8001/getUserConfig/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Oops! We haven't received a JSON response");
+      }
+
       const data = await response.json();
+      console.log("Received user configuration:", data);
+
+      if (!data || !data.buttons) {
+        throw new Error("Invalid user configuration received");
+      }
+
       setUserConfig(data);
     } catch (e) {
       console.error("Error fetching user configuration:", e);
@@ -157,6 +179,7 @@ const EmailGenerator = ({ userId = "user1" }) => {
   };
 
   const wrapInHtml = (content) => {
+    // Escape HTML special characters to prevent XSS
     const escapeHtml = (unsafe) => {
       return unsafe
         .replace(/&/g, "&amp;")
@@ -167,6 +190,8 @@ const EmailGenerator = ({ userId = "user1" }) => {
     };
 
     const escapedContent = escapeHtml(content);
+
+    // Replace newlines with <br> tags to preserve line breaks
     const formattedContent = escapedContent.replace(/\n/g, "<br>");
 
     return `
@@ -184,49 +209,33 @@ const EmailGenerator = ({ userId = "user1" }) => {
     `;
   };
 
-  const handleAction = async (action, inputValue = null) => {
+  const handleButtonClick = async (buttonConfig) => {
     setIsProcessing(true);
     setError(null);
     setStatusMessage("");
     try {
       const content = await getEmailContent();
-      const payload = {
-        userId: userConfig.userId,
-        emailContent: content,
-        ...(inputValue && { prompt: inputValue }),
-      };
-
-      const response = await fetch(action.apiEndpoint, {
+      const response = await fetch(buttonConfig.apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ userId: userConfig.userId, emailContent: content }),
       });
-
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const responseData = await response.json();
 
       const htmlContent = wrapInHtml(responseData.generatedContent);
 
+      // Create a reply to all recipients with the formatted content
       Office.context.mailbox.item.displayReplyAllForm({
         htmlBody: htmlContent,
       });
 
-      setStatusMessage(`${action.label} completed successfully!`);
-      setCurrentView("main");
+      setStatusMessage("Reply All created with generated content!");
     } catch (e) {
-      console.error(`Error in handleAction: ${e.message}`);
-      setError(`Failed to ${action.label.toLowerCase()}. Please try again.`);
+      console.error(`Error in handleButtonClick: ${e.message}`);
+      setError(`Failed to ${buttonConfig.label.toLowerCase()}. Please try again.`);
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleButtonClick = (action) => {
-    if (action.requiresInput) {
-      setSelectedAction(action);
-      setCurrentView("input");
-    } else {
-      handleAction(action);
     }
   };
 
@@ -264,50 +273,40 @@ const EmailGenerator = ({ userId = "user1" }) => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <IconComponent style={{marginRight: "10px", color: tokens.colorBrandForeground1}} />
-        <Text className={styles.title}>AI Email Assistant</Text>
+        <IconComponent style={{marginRight: "10px", color: tokens.colorPaletteBlueBorderActive}} />
+        <Text className={styles.title}> AI Email Assistant </Text>
       </div>
       <div className={styles.content}>
-        {currentView === "main" ? (
-          <>
-            <div className={styles.buttonsContainer}>
-              {userConfig.buttons.map((action, index) => {
-                const ButtonIcon = getIcon(action.icon);
-                return (
-                  <Tooltip
-                    key={index}
-                    content={<Text className={styles.tooltip}>{action.description}</Text>}
-                    relationship="description"
-                    positioning="below"
-                  >
-                    <Button
-                      appearance="primary"
-                      className={styles.button}
-                      disabled={isProcessing}
-                      onClick={() => handleButtonClick(action)}
-                      icon={<ButtonIcon />}
-                    >
-                      {action.label}
-                    </Button>
-                  </Tooltip>
-                );
-              })}
-            </div>
-            {isProcessing && (
-              <div className={styles.spinnerContainer}>
-                <Spinner size="medium" label="Processing your request..." />
-              </div>
-            )}
-            {statusMessage && (
-              <Text className={styles.statusText}>{statusMessage}</Text>
-            )}
-          </>
-        ) : (
-          <InputCard
-            title={selectedAction?.label || "Enter Prompt"}
-            onSubmit={(inputValue) => handleAction(selectedAction, inputValue)}
-            onCancel={() => setCurrentView("main")}
-          />
+        <div className={styles.buttonsContainer}>
+          {userConfig.buttons.map((buttonConfig, index) => {
+            const ButtonIcon = getIcon(buttonConfig.icon);
+            return (
+              <Tooltip
+                key={index}
+                content={<Text className={styles.tooltip}>{buttonConfig.description}</Text>}
+                relationship="description"
+                positioning="below"
+              >
+                <Button
+                  appearance="primary"
+                  className={styles.button}
+                  disabled={isProcessing}
+                  onClick={() => handleButtonClick(buttonConfig)}
+                  icon={<ButtonIcon />}
+                >
+                  {buttonConfig.label}
+                </Button>
+              </Tooltip>
+            );
+          })}
+        </div>
+        {isProcessing && (
+          <div className={styles.spinnerContainer}>
+            <Spinner size="medium" label="Processing your request..." />
+          </div>
+        )}
+        {statusMessage && (
+          <Text className={styles.statusText}>{statusMessage}</Text>
         )}
       </div>
     </div>
