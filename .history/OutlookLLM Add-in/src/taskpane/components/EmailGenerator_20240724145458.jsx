@@ -8,7 +8,7 @@ import {
   shorthands,
   tokens,
   Tooltip,
-  Textarea,
+  Input,
 } from "@fluentui/react-components";
 import IconComponent from "./IconComponent";
 import * as FluentIcons from "@fluentui/react-icons";
@@ -35,14 +35,14 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
   },
-  selectedActionLabel: {
+  selectedActionLabel:{
     fontSize: tokens.fontSizeBase500,
     fontWeight: tokens.fontWeightBold,
-    color: "#106ebe",
+    color:"#106ebe"
   },
-  actionIcon: {
-    fontSize: tokens.fontSizeBase500,
-    color: "#106ebe",
+  actionIcon:{
+    fontSize:tokens.fontSizeBase500,
+    color:"#106ebe"
   },
   content: {
     display: "flex",
@@ -102,12 +102,7 @@ const useStyles = makeStyles({
     width: "100%",
     minHeight: "150px",
     resize: "vertical",
-    ...shorthands.margin("8px", "0"),
-  },
-  labelContainer: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
+    ...shorthands.margin("8px", "0")
   },
 });
 
@@ -237,7 +232,7 @@ const EmailGenerator = ({ userId = "user1" }) => {
 
   const getIcon = (iconName) => {
     const IconComponent = FluentIcons[iconName];
-    return IconComponent ? <IconComponent /> : <FluentIcons.MailTemplate24Regular />;
+    return IconComponent ? IconComponent : FluentIcons.MailTemplate24Regular;
   };
 
   if (isLoading) {
@@ -275,15 +270,12 @@ const EmailGenerator = ({ userId = "user1" }) => {
       <div className={styles.content}>
         {selectedAction ? (
           <div className={styles.inputContainer}>
-            <div className={styles.labelContainer}>
-              {getIcon(selectedAction.icon)}
-              <Text className={styles.selectedActionLabel}>{selectedAction.label}</Text>
-            </div>
-            <Textarea
+            <Text>{selectedAction.label}</Text>
+            <Input 
               className={styles.input}
               placeholder="Enter your prompt here..."
               value={inputValue}
-              onChange={(e, data) => setInputValue(data.value)}
+              onChange={(e) => setInputValue(e.target.value)}
             />
             <div className={styles.buttonsContainer}>
               <Button appearance="primary" onClick={() => handleAction(selectedAction, inputValue)}>Send</Button>
@@ -292,24 +284,27 @@ const EmailGenerator = ({ userId = "user1" }) => {
           </div>
         ) : (
           <div className={styles.buttonsContainer}>
-            {userConfig.buttons.map((action, index) => (
-              <Tooltip
-                key={index}
-                content={<Text className={styles.tooltip}>{action.description}</Text>}
-                relationship="description"
-                positioning="below"
-              >
-                <Button
-                  appearance="primary"
-                  className={styles.button}
-                  disabled={isProcessing}
-                  onClick={() => handleButtonClick(action)}
-                  icon={getIcon(action.icon)}
+            {userConfig.buttons.map((action, index) => {
+              const ButtonIcon = getIcon(action.icon);
+              return (
+                <Tooltip
+                  key={index}
+                  content={<Text className={styles.tooltip}>{action.description}</Text>}
+                  relationship="description"
+                  positioning="below"
                 >
-                  {action.label}
-                </Button>
-              </Tooltip>
-            ))}
+                  <Button
+                    appearance="primary"
+                    className={styles.button}
+                    disabled={isProcessing}
+                    onClick={() => handleButtonClick(action)}
+                    icon={<ButtonIcon />}
+                  >
+                    {action.label}
+                  </Button>
+                </Tooltip>
+              );
+            })}
           </div>
         )}
         {isProcessing && (
