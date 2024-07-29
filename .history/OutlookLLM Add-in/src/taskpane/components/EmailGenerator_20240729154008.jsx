@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import * as AdaptiveCards from "adaptivecards";
 
 const EmailGenerator = ({ userId = "user1" }) => {
@@ -7,8 +7,6 @@ const EmailGenerator = ({ userId = "user1" }) => {
   const [error, setError] = useState(null);
   const [selectedAction, setSelectedAction] = useState(null);
   const [inputValue, setInputValue] = useState("");
-
-  const cardContainerRef = useRef(null); // Ref to the container for the adaptive card
 
   const fetchUserConfig = useCallback(async () => {
     setIsLoading(true);
@@ -28,12 +26,6 @@ const EmailGenerator = ({ userId = "user1" }) => {
   useEffect(() => {
     fetchUserConfig();
   }, [fetchUserConfig]);
-
-  useEffect(() => {
-    if (!isLoading && !error) {
-      renderAdaptiveCard();
-    }
-  }, [isLoading, error, userConfig, selectedAction, inputValue]); // Rerender card on these dependencies
 
   const handleAction = async (action, inputValue = null) => {
     try {
@@ -73,7 +65,7 @@ const EmailGenerator = ({ userId = "user1" }) => {
     }
   };
 
-  const renderAdaptiveCard = () => {
+  const renderAdaptiveCard = useCallback(() => {
     if (isLoading) {
       return <div>Loading...</div>;
     }
@@ -86,37 +78,32 @@ const EmailGenerator = ({ userId = "user1" }) => {
       return <div>No actions available.</div>;
     }
 
-    // Clear existing content in the container
-    if (cardContainerRef.current) {
-      cardContainerRef.current.innerHTML = '';
-    }
-
     const cardPayload = {
-      "type": "AdaptiveCard",
-      "version": "1.3",
-      "body": [
+      type: "AdaptiveCard",
+      version: "1.3",
+      body: [
         {
-          "type": "TextBlock",
-          "size": "Large",
-          "weight": "Bolder",
-          "text": "AI Email Assistant",
-          "wrap": true,
-          "horizontalAlignment": "Center"
+          type: "TextBlock",
+          size: "Large",
+          weight: "Bolder",
+          text: "AI Email Assistant",
+          wrap: true,
+          horizontalAlignment: "Center"
         },
         {
-          "type": "ColumnSet",
-          "columns": userConfig.buttons.map(button => ({
-            "type": "Column",
-            "width": "stretch",
-            "items": [
+          type: "ColumnSet",
+          columns: userConfig.buttons.map(button => ({
+            type: "Column",
+            width: "stretch",
+            items: [
               {
-                "type": "ActionSet",
-                "actions": [
+                type: "ActionSet",
+                actions: [
                   {
-                    "type": "Action.Submit",
-                    "title": button.label,
-                    "data": button,
-                    "style": "positive"
+                    type: "Action.Submit",
+                    title: button.label,
+                    data: button,
+                    style: "positive"
                   }
                 ]
               }
@@ -128,28 +115,28 @@ const EmailGenerator = ({ userId = "user1" }) => {
 
     if (selectedAction) {
       cardPayload.body.push({
-        "type": "Container",
-        "items": [
+        type: "Container",
+        items: [
           {
-            "type": "Input.Text",
-            "id": "promptInput",
-            "placeholder": "Enter your prompt here...",
-            "isMultiline": true
+            type: "Input.Text",
+            id: "promptInput",
+            placeholder: "Enter your prompt here...",
+            isMultiline: true
           },
           {
-            "type": "ActionSet",
-            "actions": [
+            type: "ActionSet",
+            actions: [
               {
-                "type": "Action.Submit",
-                "title": "Send",
-                "data": { action: "send" },
-                "style": "positive"
+                type: "Action.Submit",
+                title: "Send",
+                data: { action: "send" },
+                style: "positive"
               },
               {
-                "type": "Action.Submit",
-                "title": "Cancel",
-                "data": { action: "cancel" },
-                "style": "destructive"
+                type: "Action.Submit",
+                title: "Cancel",
+                data: { action: "cancel" },
+                style: "destructive"
               }
             ]
           }
@@ -175,14 +162,12 @@ const EmailGenerator = ({ userId = "user1" }) => {
     };
 
     const renderedCard = adaptiveCard.render();
-    cardContainerRef.current.appendChild(renderedCard);
-  };
+    return <div ref={(el) => el && el.appendChild(renderedCard)} />;
+  }, [isLoading, error, userConfig, selectedAction, inputValue, handleAction]);
 
   return (
-    <div ref={cardContainerRef} style={{ maxWidth: "600px", margin: "0 auto", padding: "20px", textAlign: "center" }}>
-      {isLoading && <div>Loading...</div>}
-      {error && <div style={{ color: "red" }}>Error: {error}</div>}
-      {!isLoading && !userConfig && <div>No actions available.</div>}
+    <div style={{ maxWidth: "600px", margin: "0 auto", padding: "20px" }}>
+      {renderAdaptiveCard()}
     </div>
   );
 };
