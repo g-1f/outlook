@@ -1,21 +1,21 @@
-// import * as React from "react";
-// import { createRoot } from "react-dom/client";
-// import App from "./components/App";
-// import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import * as React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./components/App";
+import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 
-// /* global document, Office */
+/* global document, Office */
 
-// const rootElement = document.getElementById("container");
-// const root = createRoot(rootElement);
+const rootElement = document.getElementById("container");
+const root = createRoot(rootElement);
 
-// /* Render application after Office initializes */
-// Office.onReady(() => {
-//   root.render(
-//     <FluentProvider theme={webLightTheme}>
-//       <App />
-//     </FluentProvider>
-//   );
-// });
+/* Render application after Office initializes */
+Office.onReady(() => {
+  root.render(
+    <FluentProvider theme={webLightTheme}>
+      <App />
+    </FluentProvider>
+  );
+});
 
 import * as React from "react";
 import { createRoot } from "react-dom/client";
