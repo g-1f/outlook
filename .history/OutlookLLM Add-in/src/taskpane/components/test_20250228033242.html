@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Model Architecture</title>
+  <style>
+    :root {
+      --primary-color: #0288d1;
+      --primary-light: #e1f5fe;
+      --primary-dark: #01579b;
+      --secondary-color: #ffa000;
+      --secondary-light: #fff8e1;
+      --secondary-dark: #ff6f00;
+      --bg-color: #f5f7fa;
+      --container-bg: #ffffff;
+      --text-color: #333333;
+      --text-secondary: #555555;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      background-color: var(--bg-color);
+      margin: 0;
+      padding: 0;
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .header {
+      text-align: center;
+      padding: 2rem 1rem;
+      width: 100%;
+      background-color: var(--container-bg);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+    
+    h1 {
+      margin: 0;
+      color: var(--primary-dark);
+      font-weight: 600;
+      font-size: 2.2rem;
+    }
+    
+    .subtitle {
+      color: var(--text-secondary);
+      font-weight: 400;
+      margin-top: 0.5rem;
+      font-size: 1.1rem;
+    }
+    
+    .content {
+      width: 100%;
+      max-width: 1300px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .diagram-container {
+      background-color: var(--container-bg);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      width: 100%;
+      transition: transform 0.3s ease;
+    }
+    
+    .diagram-container:hover {
+      transform: translateY(-5px);
+    }
+    
+    .diagram {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    
+    .diagram text {
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    }
+    
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+    
+    button {
+      padding: 0.7rem 1.2rem;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s, transform 0.2s;
+    }
+    
+    button:hover {
+      background-color: var(--primary-dark);
+      transform: translateY(-2px);
+    }
+    
+    .description {
+      background-color: var(--container-bg);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      padding: 2rem;
+      width: 100%;
+      line-height: 1.6;
+    }
+    
+    h2 {
+      color: var(--primary-dark);
+      border-bottom: 2px solid var(--primary-light);
+      padding-bottom: 0.5rem;
+      margin-top: 0;
+    }
+    
+    h3 {
+      color: var(--primary-color);
+      margin-bottom: 0.5rem;
+    }
+    
+    .stage-description {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .stage-column {
+      flex: 1;
+      min-width: 300px;
+    }
+    
+    .footer {
+      margin-top: 2rem;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 1rem;
+      width: 100%;
+    }
+    
+    @media screen and (max-width: 768px) {
+      .content {
+        padding: 1rem;
+      }
+      
+      .diagram-container {
+        padding: 1rem;
+      }
+      
+      h1 {
+        font-size: 1.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Trading Model Architecture</h1>
+    <div class="subtitle">AI-driven trading strategy with synthetic reasoning trajectories</div>
+  </div>
+
+  <div class="content">
+    <div class="controls">
+      <button id="downloadBtn">Download SVG</button>
+      <button id="fullscreenBtn">Fullscreen View</button>
+    </div>
+    
+    <div class="diagram-container" id="diagramContainer">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 1200 600"
+        class="diagram"
+        id="modelDiagram"
+      >
+        <!-- Background gradient -->
+        <defs>
+          <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#e0f7fa;stop-opacity:0.6" />
+            <stop offset="100%" style="stop-color:#e0f2f1;stop-opacity:0.3" />
+          </linearGradient>
+        </defs>
+        
+        <rect
+          x="0"
+          y="0"
+          width="1200"
+          height="600"
+          fill="url(#bgGradient)"
+        />
+
+        <!-- Stage 1 container with drop shadow -->
+        <filter id="dropShadow">
+          <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.15"/>
+        </filter>
+        
+        <rect
+          x="20"
+          y="20"
+          width="360"
+          height="560"
+          fill="#f9f9f9"
+          stroke="#333"
+          stroke-width="2"
+          rx="8"
+          ry="8"
+          filter="url(#dropShadow)"
+        />
+        <text
+          x="200"
+          y="55"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="20"
+          font-weight="bold"
+          text-anchor="middle"
+          fill="#01579b"
+        >
+          Stage 1: Supervised Fine-Tuning
+        </text>
+
+        <!-- Stage 1 boxes with enhanced styling -->
+        <!-- Box A1 -->
+        <rect
+          x="60"
+          y="80"
+          width="280"
+          height="80"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="200"
+          y="110"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Data Collection
+        </text>
+        <text
+          x="200"
+          y="135"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          GIR, Market, News
+        </text>
+
+        <!-- Box A2 -->
+        <rect
+          x="60"
+          y="190"
+          width="280"
+          height="80"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="200"
+          y="220"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Reasoning Trajectory Generation
+        </text>
+        <text
+          x="200"
+          y="245"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          Synthetic Chain-of-Thought
+        </text>
+
+        <!-- Box A3 -->
+        <rect
+          x="60"
+          y="300"
+          width="280"
+          height="80"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="200"
+          y="330"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Trajectory Evaluation & Selection
+        </text>
+        <text
+          x="200"
+          y="355"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          Quality Assessment
+        </text>
+
+        <!-- Box A4 -->
+        <rect
+          x="60"
+          y="410"
+          width="280"
+          height="80"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="200"
+          y="440"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Model Fine-Tuning
+        </text>
+        <text
+          x="200"
+          y="465"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          Optimize Reasoning
+        </text>
+
+        <!-- Stage 1 arrows with improved styling -->
+        <!-- Arrow A1 -> A2 -->
+        <line x1="200" y1="160" x2="200" y2="175" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="200" y1="175" x2="200" y2="190" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="200,190 195,180 205,180" fill="#333" />
+
+        <!-- Arrow A2 -> A3 -->
+        <line x1="200" y1="270" x2="200" y2="285" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="200" y1="285" x2="200" y2="300" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="200,300 195,290 205,290" fill="#333" />
+
+        <!-- Arrow A3 -> A4 -->
+        <line x1="200" y1="380" x2="200" y2="395" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="200" y1="395" x2="200" y2="410" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="200,410 195,400 205,400" fill="#333" />
+
+        <!-- Stage 2 container with drop shadow -->
+        <rect
+          x="420"
+          y="20"
+          width="600"
+          height="560"
+          fill="#f9f9f9"
+          stroke="#333"
+          stroke-width="2"
+          rx="8"
+          ry="8"
+          filter="url(#dropShadow)"
+        />
+        <text
+          x="720"
+          y="55"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="20"
+          font-weight="bold"
+          text-anchor="middle"
+          fill="#01579b"
+        >
+          Stage 2: Reinforcement Learning
+        </text>
+
+        <!-- Stage 2 boxes with enhanced styling -->
+        <!-- B1 -->
+        <rect
+          x="600"
+          y="80"
+          width="240"
+          height="70"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="720"
+          y="110"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Event-Driven RL Environment
+        </text>
+        <text
+          x="720"
+          y="135"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          News & Market Events Intake
+        </text>
+        
+        <!-- B2 -->
+        <rect
+          x="600"
+          y="190"
+          width="240"
+          height="70"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="720"
+          y="225"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          PPO/GRPO Training
+        </text>
+
+        <!-- Reward Functions container with enhanced styling -->
+        <rect
+          x="520"
+          y="300"
+          width="400"
+          height="130"
+          fill="#fff8e1"
+          stroke="#ffa000"
+          stroke-width="2"
+          rx="8"
+          ry="8"
+        />
+        <text
+          x="720"
+          y="330"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="18"
+          fill="#ff6f00"
+          text-anchor="middle"
+          font-weight="bold"
+        >
+          Reward Functions
+        </text>
+
+        <!-- Reward boxes with enhanced styling -->
+        <rect
+          x="535"
+          y="350"
+          width="110"
+          height="60"
+          fill="#fff8e1"
+          stroke="#ffa000"
+          stroke-width="1.5"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="590"
+          y="385"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="15"
+          fill="#ff6f00"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Format
+        </text>
+
+        <rect
+          x="655"
+          y="350"
+          width="110"
+          height="60"
+          fill="#fff8e1"
+          stroke="#ffa000"
+          stroke-width="1.5"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="710"
+          y="385"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="15"
+          fill="#ff6f00"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Return
+        </text>
+
+        <rect
+          x="775"
+          y="350"
+          width="110"
+          height="60"
+          fill="#fff8e1"
+          stroke="#ffa000"
+          stroke-width="1.5"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="830"
+          y="385"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="15"
+          fill="#ff6f00"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Penalize
+        </text>
+
+        <!-- Output box (B3) with enhanced styling -->
+        <rect
+          x="600"
+          y="470"
+          width="240"
+          height="70"
+          fill="#e1f5fe"
+          stroke="#0288d1"
+          stroke-width="2"
+          rx="6"
+          ry="6"
+        />
+        <text
+          x="720"
+          y="500"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="16"
+          fill="#01579b"
+          text-anchor="middle"
+          font-weight="500"
+        >
+          Trading Decision Output
+        </text>
+        <text
+          x="720"
+          y="525"
+          font-family="Segoe UI, Roboto, Arial"
+          font-size="13"
+          fill="#01579b"
+          text-anchor="middle"
+        >
+          Portfolio Weights
+        </text>
+
+        <!-- Stage 2 arrows with improved styling -->
+        <!-- Arrow B1 -> B2 -->
+        <line x1="720" y1="150" x2="720" y2="165" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="720" y1="165" x2="720" y2="190" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="720,190 715,180 725,180" fill="#333" />
+
+        <!-- Arrow B2 -> Reward Functions -->
+        <line x1="720" y1="260" x2="720" y2="275" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="720" y1="275" x2="720" y2="300" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="720,300 715,290 725,290" fill="#333" />
+
+        <!-- Arrow Reward Functions -> Output -->
+        <line x1="720" y1="430" x2="720" y2="445" stroke="#333" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="720" y1="445" x2="720" y2="470" stroke="#333" stroke-width="2.5" stroke-dasharray="2 2" stroke-linecap="round" />
+        <polygon points="720,470 715,460 725,460" fill="#333" />
+
+        <!-- Connection between stages with improved styling -->
+        <!-- Add a curved path for better visual appeal -->
+        <path d="M 340 300 C 370 300, 390 300, 420 300" 
+              fill="none" 
+              stroke="#333" 
+              stroke-width="3" 
+              stroke-linecap="round"/>
+        <polygon points="420,300 410,295 410,305" fill="#333" />
+      </svg>
+    </div>
+    
+    <div class="description">
+      <h2>Trading Model Architecture Details</h2>
+      
+      <div class="stage-description">
+        <div class="stage-column">
+          <h3>Stage 1: Supervised Fine-Tuning</h3>
+          <p>This stage focuses on building and optimizing reasoning capabilities:</p>
+          <ul>
+            <li><strong>Data Collection</strong> - Gathering data from GIR, market sources, and news feeds</li>
+            <li><strong>Reasoning Trajectory Generation</strong> - Creating synthetic chain-of-thought reasoning paths that analyze market conditions</li>
+            <li><strong>Trajectory Evaluation & Selection</strong> - Assessing the quality of different reasoning approaches and selecting top performers</li>
+            <li><strong>Model Fine-Tuning</strong> - Optimizing the model to follow effective reasoning patterns for market analysis</li>
+          </ul>
+        </div>
+        
+        <div class="stage-column">
+          <h3>Stage 2: Reinforcement Learning</h3>
+          <p>This stage implements a reinforcement learning approach to optimize trading decisions:</p>
+          <ul>
+            <li><strong>Event-Driven RL Environment</strong> - A simulation environment that reacts to market events and news intake</li>
+            <li><strong>PPO/GRPO Training</strong> - Training using Proximal Policy Optimization or Guided Policy Optimization algorithms</li>
+            <li><strong>Reward Functions</strong>:
+              <ul>
+                <li><strong>Format</strong> - Evaluating the structure and format of decisions</li>
+                <li><strong>Return</strong> - Measuring financial performance</li>
+                <li><strong>Penalize</strong> - Applying penalties for high-risk or unfavorable actions</li>
+              </ul>
+            </li>
+            <li><strong>Trading Decision Output</strong> - Generating final portfolio weights and trading actions</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>© 2025 Trading Model Architecture | Created on February 28, 2025</p>
+  </div>
+
+  <script>
+    // Functionality for download button
+    document.getElementById('downloadBtn').addEventListener('click', function() {
+      const svg = document.getElementById('modelDiagram');
+      const serializer = new XMLSerializer();
+      const svgBlob = new Blob([serializer.serializeToString(svg)], {type: 'image/svg+xml'});
+      const url = URL.createObjectURL(svgBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'trading-model-architecture.svg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+    
+    // Functionality for fullscreen button
+    document.getElementById('fullscreenBtn').addEventListener('click', function() {
+      const container = document.getElementById('diagramContainer');
+      
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        container.requestFullscreen().catch(err => {
+          console.error(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
