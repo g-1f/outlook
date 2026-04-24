@@ -1,553 +1,697 @@
-# Skill Graph Architecture: From Flat Skills to Traversable Knowledge
+# The Library: Skill Graph Architecture
 
-## The Problem with Single Skill Files
+## Problem
 
-The default approach to agent skills is one file, one capability. A SKILL.md that captures everything an agent needs to know about a domain in a single document. This works for simple, procedural tasks — a code review checklist, a summarization template, a formatting guide.
+A single SKILL.md works for procedures — fixed steps, one consumer, no branching. It breaks when the domain has depth. A trade-generation file starts at 2,000 tokens, then you add multi-leg coordination, concentration classification edge cases, currency hedging rules, and it hits 15,000. Every request pays the cost of the most complex case. A simple AAPL buy loads currency hedging instructions it will never use.
 
-It breaks when the domain has depth.
+A flat file cannot express variable-depth reasoning. When a Japan-to-Korea rotation requires composing concepts — concentration classification interacting with benchmark provider rules interacting with FX hedging policy — in ways the author never anticipated, there is no path to follow.
 
-Consider trade generation for an AWM portfolio manager. A single `trade-generation.md` starts reasonable: parse intent, check portfolio, size position, check risk, run compliance, format order. Eight steps, maybe 2,000 tokens. Then you encounter a Japan-to-Korea rotation where sizing depends on vol regime, which depends on correlation with existing book, which interacts with concentration limits that classify differently depending on benchmark provider, which affects whether currency hedging is mandatory. You add sections. The file hits 8,000 tokens, then 15,000. The agent burns context window on currency hedging instructions when the PM just wants to buy AAPL.
+---
 
-The deeper problem isn’t file size — it’s that **a flat file can’t express variable-depth reasoning**. Every request pays the cost of the most complex case. And when a novel combination arises that the author didn’t anticipate, the agent has no path to follow because the document didn’t connect the relevant concepts.
+## Skill Graphs
 
------
+A skill graph decomposes domain knowledge into atomic skill folders connected by `[[wikilinks]]` embedded in prose. Each folder is one complete concept. Links tell the agent when and why to follow a connection.
 
-## What a Skill Graph Is
-
-A skill graph decomposes domain knowledge into atomic skill files connected by wikilinks embedded in prose. Each file captures one complete concept, technique, or procedure. The links between them tell the agent *when* and *why* to follow a connection.
+A skill is a folder with a SKILL.md and optional scripts:
 
 ```
-trade-generation/
-  index.md              ← workflow entry point
-  intent-parsing.md     ← decompose PM request into legs
-  portfolio-state.md    ← fetch and normalize holdings
-  mandate-check.md      ← eligible instruments per IMA
-  position-sizing.md    ← Kelly framework, regime adjustment
-  vol-regime.md         ← regime detection, classification
-  correlation-check.md  ← book-level correlation analysis
-  risk-limits.md        ← all limit types, breach logic
-  execution-routing.md  ← venue/algo selection
-  compliance-check.md   ← restricted list, conflicts, reg checks
-  currency-hedge.md     ← FX exposure, hedge ratio
-  multi-leg.md          ← leg coordination, netting
-  concentration.md      ← classification rules by provider
-  order-format.md       ← OMS ticket generation
+position-sizing/
+  SKILL.md
+  scripts/
+    kelly.py
+    adv_check.py
 ```
 
-The critical distinction from a simple directory of files: **the wikilinks are embedded in reasoning prose, not in metadata headers.** A position-sizing skill doesn’t list dependencies in YAML frontmatter. Instead:
+The SKILL.md reads as domain knowledge with routing embedded in prose:
 
 ```markdown
+---
+name: position-sizing
+description: Size positions using Kelly-adjusted framework with vol-regime caps
+  and correlation adjustments.
+mandatory:
+  - skill: red-team
+    hook: before_concluding
+    inputs: current_sizing_decision
+  - skill: _validation/sizing-coherence
+    hook: after_artifact_produced
+    inputs: final_artifact
+---
+
 # Position Sizing
 
-Start with the Kelly-optimal fraction for the instrument.
-This requires understanding the current [[vol-regime]] —
-in risk-off environments, even a strong signal should be
-sized conservatively.
+Start with the Kelly-optimal fraction. Run `scripts/kelly.py`
+with signal strength and win rate to get the base fraction.
+
+Adjust for the current [[vol-regime]] — in risk-off
+environments, cap at 50bps regardless of Kelly output.
 
 Check [[correlation-check]] against existing book. If the
 new position is highly correlated with your largest holding,
 you're concentrating risk even if single-name limits pass.
-In that case, the effective size is the sum of both positions,
-and [[risk-limits]] should be evaluated on that combined basis.
 
-For illiquid names where ADV is below $10M, sizing constraints
-come from [[execution-routing]] — there's no point sizing at
-200bps if you can't execute without moving the market. Work
-backward from executable size.
+For illiquid names, run `scripts/adv_check.py` to get the
+maximum executable size. If it's below the Kelly-optimal,
+that's your binding constraint.
 ```
 
-The agent reads prose that tells it **how to think about sizing**, and the wikilinks appear exactly where the reasoning demands another concept. The “check correlation” sentence doesn’t just point to a file — it explains the reasoning for going there. The last paragraph introduces a conditional reasoning path: for illiquid names, sizing is constrained by execution, not by Kelly. In a linear recipe, this would require `IF illiquid: reorder steps`. In the prose model, the agent naturally follows the reasoning and pulls in execution-routing concerns when the text tells it that matters.
+The prose is the control flow. "For illiquid names" is a conditional. "These can be evaluated independently" signals parallelism. Natural language carries the routing logic for traversals the model judges at runtime.
 
------
+The frontmatter declares **mandatory skills** — traversals the harness enforces regardless of model judgment. This is the mechanism for non-negotiables (compliance, risk, red-team) and for validation. The prose stays pure; enforcement lives in structured metadata.
 
-## Skill Graph vs Single SKILL.md: Concrete Comparison
+**When to use a graph vs a single file:** if a skill is a procedure (fixed steps, one consumer), keep it as one file. If it is a domain (interacting concepts, multiple consumers, variable depth), decompose it into a graph.
 
-### Scenario 1: “Buy 100bps AAPL”
+---
 
-**Single SKILL.md:** Works perfectly. Linear flow, steps 1–8, done. The full file is in context but most of it is irrelevant — currency hedging, multi-leg coordination, concentration classification all sit unused.
+## Index as Entry Point
 
-**Skill graph:** Agent loads workflow entry point, follows the main reasoning path through intent-parsing → portfolio-state → mandate-check → position-sizing → vol-regime → risk-limits → compliance-check → order-format. Skips correlation-check (prose says “if highly correlated with largest holding” — it checks, JPM is the largest, low correlation with AAPL, moves on). Skips execution-routing (prose says “for illiquid names” — AAPL trades >$1B daily). Skips multi-leg, currency-hedge, concentration entirely — the prose never triggers them.
-
-**Winner:** SKILL.md is simpler for this case. The skill graph loads 8 files instead of 1, with similar total token count but more retrieval operations. Marginal overhead, same result.
-
-### Scenario 2: Japan-to-Korea Rotation, Asia Gross Flat
-
-**Single SKILL.md:** The agent needs multi-leg coordination, Korea’s classification (MSCI says EM, FTSE says Developed), gross-flat netting, and JPY/KRW hedging implications. All of this might be in the 15,000-token file if someone anticipated it. The agent scans the entire document, and the interactions between concepts (classification affects concentration limits, which affects allowable sizing, which affects netting, which affects FX exposure) aren’t explicitly connected. The agent must infer these chains.
-
-**Skill graph:** Intent-parsing produces two legs. The agent follows [[multi-leg]] which says “evaluate [[risk-limits]] on combined net position and check [[concentration]] for country-level limits.” These are independent — the agent dispatches them in parallel. Concentration.md explains that Korea’s classification differs by provider and tells the agent to check the mandate’s benchmark. The agent follows [[mandate-check]] output, confirms FTSE Global, Korea is DM, concentration flag doesn’t apply. Currency-hedge activates because currency exposure changed. Each file is ~500 tokens; the agent loads only what this specific trade demands. Total context: ~6,000 tokens of skill content, all relevant.
-
-**Winner:** Skill graph. The composition of atomic concepts handles interactions that no single file anticipated in exactly this combination. The variable-depth traversal means the agent reached 3 levels deep on concentration classification but stayed at 1 level for execution routing (not needed for liquid names).
-
-### Scenario 3: Cross-Workflow Reuse
-
-A separate portfolio-rebalancing workflow needs position-sizing, risk-limits, and compliance-check — the same atomic skills trade-generation uses. A risk-reporting workflow needs portfolio-state, risk-limits, and concentration.
-
-**Single SKILL.md:** Each workflow is its own monolithic file. Position-sizing logic is duplicated (or the agent is told “refer to trade-generation.md for sizing” — now you have implicit cross-file dependencies anyway).
-
-**Skill graph:** The atomic skills are shared nodes. Multiple workflows reference the same `position-sizing.md`. Update the Kelly framework once, every workflow inherits the change. The graph structure emerges from reuse.
-
-**Winner:** Skill graph. Shared nodes are the fundamental advantage at the system level.
-
-### When Single SKILL.md Wins
-
-When the domain is genuinely linear and self-contained. A compliance pre-trade check that always does restricted-list → conflict-check → reg-threshold → approve/reject. Each step isn’t reused elsewhere. The interaction between steps is trivial. Decomposing it into four files adds retrieval overhead and maintenance burden. Some skills are just recipes, and recipes should stay in one file.
-
-**The heuristic:** If a skill is a *procedure* (fixed steps, one consumer, no branching), keep it as a single file. If it’s a *domain* (interacting concepts, multiple consumers, context-dependent depth), decompose it into a graph.
-
------
-
-## Architecture: One Agent, Continuous Traversal
-
-### Core Principle
-
-One main agent maintains a continuous reasoning thread through the skill graph. Subagents are used exclusively for parallel fan-out when the agent identifies independent branches. The main agent never loses its reasoning context. The subagents are ephemeral workers that load a skill, apply it to specific data, and return a condensed finding.
-
-This differs fundamentally from the orchestrator-subagent pattern where each subagent gets a full task and independent reasoning autonomy. Here, the main agent is the sole reasoner. Subagents are parallel retrieval-with-light-inference.
-
-### How Traversal Works
-
-```
-PM request arrives
-      │
-      ▼
-Main agent loads workflow skill (entry point)
-      │
-      ▼
-Reads prose, encounters [[link]]
-      │
-      ├── Link is in main reasoning path
-      │   → load_skill: pull content into main agent's context
-      │   → Agent reasons through it, continues
-      │
-      ├── Two+ links are independent of each other
-      │   → Spin parallel subagents, each loads one skill
-      │   → Return condensed findings to main agent
-      │   → Main agent incorporates results, continues
-      │
-      └── Link is peripheral (not core to current reasoning)
-          → Spin single subagent to handle it
-          → Return one-sentence conclusion
-          → Main agent gets answer without full skill content
-          → Context compression: conclusion, not the reasoning
-```
-
-The subagent serves double duty: **parallel execution** (when branches are independent) and **context compression** (when a skill is peripheral and the main agent only needs the conclusion, not the full reasoning).
-
-### What a Subagent Invocation Looks Like
-
-The main agent is reasoning about position sizing and needs correlation data and vol regime data independently:
-
-```
-Main agent (continuous context):
-  "I'm sizing a 150bps AAPL position. Before finalizing,
-   I need correlation with existing book and the current
-   vol regime. These are independent."
-
-Subagent A (ephemeral):
-  Skill: correlation-check.md
-  Data: {instrument: AAPL, portfolio: [current holdings]}
-  Question: "What is the correlation profile against
-   existing holdings? Is there concentration risk?"
-  Returns: "AAPL has 0.82 correlation with existing MSFT
-   position (200bps). Combined tech exposure 350bps.
-   Recommend 50% size reduction."
-
-Subagent B (ephemeral):
-  Skill: vol-regime.md
-  Data: {instrument: AAPL, market_data: [recent vol]}
-  Question: "Current vol regime and sizing cap?"
-  Returns: "Neutral regime. Cap at 100bps."
-```
-
-The main agent receives both, synthesizes: “correlation says reduce by 50%, regime caps at 100bps, effective cap is 75bps,” and continues sizing. One continuous thought process enriched by parallel lookups.
-
-### The Two Types of Skill Files
-
-**Workflow skills** are entry points that describe a domain process in prose with embedded links. They define the general sequence, mandatory checkpoints, and the reasoning narrative:
+The graph starts with `skills/index.md`, a catalog of what exists. The index is the static view of the graph — useful for visualization, onboarding, lint passes, and orienting the agent at startup.
 
 ```markdown
-# Trade Generation
+# Skills Index
 
-When a PM submits a trade intent, first understand what
-they're actually asking for through [[intent-parsing]].
-A request like "add tech exposure" requires decomposition;
-"buy 500 AAPL" does not.
+## Workflows
+- [[trade-generation]] — generate orders from PM trade intents
+- [[portfolio-rebalance]] — rebalance portfolio to target weights
+- [[risk-report]] — produce risk analytics
 
-With the intent clarified, check the current
-[[portfolio-state]] and verify the proposed trade is
-permissible under [[mandate-check]]. These two can be
-evaluated independently.
+## Shared Atomic Skills
+- [[position-sizing]] — Kelly-adjusted sizing framework
+- [[risk-limits]] — gross, net, concentration limits
+- [[compliance-check]] — restricted list, conflicts, regs
 
-Now size the position via [[position-sizing]], which
-will pull in [[vol-regime]], [[correlation-check]],
-and [[execution-routing]] as the specific situation
-demands.
-
-The sized trade must pass [[risk-limits]] on the
-post-trade portfolio. For multi-leg rotations, evaluate
-risk on the combined net position — [[multi-leg]]
-handles this coordination.
-
-Before any order leaves, [[compliance-check]] is
-non-negotiable. Finally, format via [[order-format]]
-for OMS submission.
+## Enforcement and Validation Skills
+- [[red-team]] — adversarial review of proposed actions
+- [[_validation/sizing-coherence]] — validates sizing artifact alignment
+- [[_validation/compliance-coherence]] — validates compliance artifact
 ```
 
-This is neither a rigid step-list nor free-form wandering. It’s a guided reasoning narrative. The sequence is clear, but the prose carries nuance: “these two can be evaluated independently” signals parallelism. “As the specific situation demands” tells the agent not to preload everything. “Non-negotiable” marks a mandatory node.
+The index is injected into the agent's system prompt at startup so the agent knows the shape of the graph. It is not the execution plan. The agent traverses by reading prose at each node and following wikilinks based on runtime judgment plus frontmatter-declared mandatories.
 
-**Atomic skills** are knowledge nodes containing domain expertise with links for depth:
+---
 
-```markdown
-# Concentration Limits
+## Two Graphs
 
-<!-- tier: reference -->
+The system operates over two separate graphs, both stored in enterprise document management (SharePoint for skills, OneDrive for memory), both accessible through deepagents' composite filesystem backend.
 
-Korea is classified differently across providers:
-MSCI treats it as Emerging Market, FTSE Russell as
-Developed Market, S&P as Emerging Market.
+**Skill graph** — authored expertise. How to size positions, what risk limits mean, when to hedge currency. Changes slowly through human-reviewed edits. Version-controlled via a Git-to-SharePoint publishing pipeline rather than ad-hoc SharePoint versioning. The textbook.
 
-Check the mandate's stated benchmark to determine
-which classification applies. If the mandate references
-MSCI ACWI, Korea counts toward EM concentration limits.
-If FTSE Global, it doesn't.
-
-Single-country concentration: flag at 3% active weight
-vs benchmark. Single-name: flag at 2% absolute.
-
-When processing regional rotations via [[multi-leg]],
-evaluate concentration on the net post-trade portfolio
-across all legs simultaneously, not per-leg.
-```
-
------
-
-## Depth Control
-
-Unbounded traversal is the primary risk. If every skill links to others, and those link further, the agent could chase references indefinitely. Three mechanisms operate simultaneously to control this.
-
-### 1. Prose-Driven Depth Gating
-
-The skill content itself controls typical traversal depth through how links are framed:
-
-```markdown
-Classify the current environment using 20-day realized vol
-vs its 1-year percentile. Above 75th percentile: risk-off.
-Below 25th: risk-on. Between: neutral.
-
-For more granular regime detection using HMM-based signals,
-see [[regime-detection-advanced]]. This is rarely needed
-for standard equity sizing.
-```
-
-The last sentence is a soft depth gate. “Rarely needed for standard equity sizing” tells the agent: this link exists, but you probably don’t need it. For 95% of trades, the agent doesn’t follow. For the edge case where the PM says “vol feels weird, be careful,” the agent has the contextual cue to go deeper.
-
-This means **skill authoring quality directly determines system behavior**. A domain expert writes position-sizing.md and decides which concepts are core (always follow) vs peripheral (follow if relevant) through how they frame the link in prose. Human design-time judgment, encoded in natural language.
-
-### 2. Purpose-Aware Traversal
-
-The main agent maintains full context of the original request. At every potential link traversal, the implicit question is “does going deeper materially change my output for this specific request?” The system prompt encodes this:
+**Memory graph** — accumulated experience. AAPL-MSFT correlation spiked during the last sell-off. This PM sizes aggressively on semis. Korea concentration cleared under FTSE in 12 of 12 rotations this quarter. Changes constantly, maintained by agents themselves. Stored on OneDrive with user-ownership semantics. The notebook.
 
 ```
-When you encounter [[links]] in skill content:
-
-- Follow links in the direct reasoning path for the
-  current request
-- For links described as edge cases, advanced topics,
-  or rare scenarios, follow only if the current request
-  matches those conditions
-- If you've gathered enough information to produce a
-  sound output for the current step, stop traversing
-- Never traverse more than 3 levels deep from the
-  workflow entry point without explicit justification
+skills/ (SharePoint)              memory/ (OneDrive)
+  index.md                          index.md
+  trade-generation/                 correlations/
+    SKILL.md                          tech-sector.md
+  position-sizing/                  regimes/
+    SKILL.md                          current-regime.md
+    scripts/kelly.py                pm-patterns/
+  vol-regime/                         desk-alpha.md
+    SKILL.md
+  risk-limits/
+    SKILL.md
+  compliance-check/
+    SKILL.md
+  red-team/
+    SKILL.md
+  _validation/
+    sizing-coherence/SKILL.md
+    compliance-coherence/SKILL.md
 ```
 
-The hard depth cap (3 levels) is a safety net. The primary mechanism is the agent’s judgment informed by prose framing, which only works because the main agent has continuous context of the original request. A dispatched subagent without that context can’t judge when to stop.
+Different trust levels (skill is instruction, memory is observation), different evolution rates (skills through human review, memory autonomously), different storage patterns (skills read-heavy with authored-release cadence, memory write-heavy with accumulation).
 
-### 3. Tier Annotations
+---
 
-Each skill declares a depth tier in minimal frontmatter:
+## Execution Model
+
+The execution model has three modes, all driven by model judgment at runtime, plus one enforcement layer driven by skill frontmatter.
+
+### Mode 1: Inline Graph Walk (Default)
+
+The agent navigates the skill graph within its own context. It reads the workflow entry, encounters wikilinks in prose, calls `navigate(wikilink)` to load the target skill into its context, reasons over it, and continues. Scripts run via the shell tool. Memory is read and written via filesystem tools. The reasoning thread stays continuous.
+
+Most workflows — routine trades, standard rebalances, simple risk reports — complete entirely in this mode. One agent, one context, walks the graph, finishes.
+
+### Mode 2: Parallel Subagent Spawn
+
+When the skill prose declares multiple independent children ("evaluate X and Y independently," "gather A, B, and C"), the agent spawns subagents in parallel via the `task` tool. Each child works on its skill in isolation. The parent waits for all, receives findings directly, continues.
+
+Parallelism is prose-driven. The agent identifies independence from the skill text and issues multiple `task` calls in a single turn. `create_agent` executes them concurrently.
+
+### Mode 3: Same-Node Self-Spawn (Context Isolation)
+
+When the agent navigates to a node and realizes the reasoning there is complex enough to warrant isolation — because the skill's conditional structure is intricate for the current data, or because the parent's context has grown dense — it spawns a fresh instance of itself at the same node with a narrowly scoped sub-problem.
+
+The parent has already loaded the skill into its context (that's how it made the judgment). The child loads the same skill into fresh context and receives the specific hard sub-problem. The parent waits, integrates the child's finding, continues the workflow.
+
+This preserves continuous reasoning for the common case while providing an escape valve for genuinely complex sub-problems.
+
+### The Bitter-Lesson Frame
+
+Which mode fires is a runtime judgment the model makes. As models improve, they judge better — recognizing parallelism in prose, sensing when context is getting dense, deciding when reasoning needs isolation. The harness doesn't change; the execution gets smarter as model capability grows.
+
+---
+
+## Mandatory Traversals
+
+Some traversals cannot be left to model judgment. Red-team on every sizing decision. Compliance-check on every order. Validation of specific high-consequence artifacts. These are non-negotiables — the skill author has decided they must happen, and the harness enforces this regardless of what the agent judges.
+
+### Frontmatter Declaration
+
+Mandatoriness lives in skill frontmatter, not in prose. This keeps the prose clean and makes enforcement mechanical.
 
 ```yaml
 ---
-tier: core
+name: position-sizing
+mandatory:
+  - skill: red-team
+    hook: before_concluding
+    inputs: current_sizing_decision
+  - skill: _validation/sizing-coherence
+    hook: after_artifact_produced
+    inputs: final_artifact
 ---
 ```
 
-Three tiers:
+Each entry declares: which skill must be invoked, at what hook point in this skill's lifecycle, and what inputs to pass.
 
-- **core** — always loaded immediately when the agent hits the link. These are skills in the main reasoning path: position-sizing, risk-limits, compliance-check.
-- **reference** — loaded on demand when the agent follows the link. These are skills that provide depth: vol-regime, correlation-check, concentration.
-- **deep** — loaded only if the agent explicitly states justification. These are specialized knowledge: regime-detection-advanced, market-microstructure, order-book-dynamics.
+**Hooks:**
 
-The `load_skill` mechanism respects tiers:
+- `before_concluding` — mandatory runs before the agent can terminate this node. Used for pre-output review (red-team).
+- `after_artifact_produced` — mandatory runs after the node produces its output, before that output flows to the parent. Used for validation.
+- `on_entry` — mandatory runs when the agent enters this node, before reasoning begins. Used for pre-reasoning checks.
 
-```python
-def load_skill(name: str, justification: str = None):
-    skill = graph.get(name)
+### Enforcement Mechanism
 
-    if skill.tier in ("core", "reference"):
-        trace.record_load(name)
-        return skill.content
+A single middleware (`MandatoryMiddleware`) handles all mandatories uniformly. It reads the current skill's frontmatter on node entry. It tracks which mandatories have been satisfied by inspecting the trace for corresponding spawns. When the agent attempts an action that would bypass an unsatisfied mandatory (concluding before red-team ran, propagating an artifact before validation ran), the middleware intercepts and sends a correction message:
 
-    elif skill.tier == "deep":
-        if justification:
-            trace.record_load(name, justification=justification)
-            return skill.content
-        else:
-            return f"[{name} is a deep-tier skill. "
-                   f"State why you need it to load.]"
+> You produced a finding at position-sizing but did not invoke red-team, which is mandatory for this skill (hook: before_concluding). Invoke red-team against your current sizing decision before concluding.
+
+The agent re-engages, runs the mandatory skill, and resubmits. The trace shows the original attempt, the correction, and the subsequent compliance — more auditable than silent blocking.
+
+### Red-Team and Validation Are the Same Pattern
+
+Red-team is a mandatory that runs on the node's work product before concluding — it adversarially reviews the decision. Validation is a mandatory that runs on the node's output artifact after production — it checks coherence before propagation. Both are "this skill declares another skill must run at a specific hook point."
+
+One mechanism handles both. Authoring a new enforcement class (say, second-opinion on large trades) is just declaring it in skill frontmatter. No harness changes.
+
+### Selective Validation
+
+Not every node declares validation. Validation is an opt-in property of skills that benefit from it:
+
+- High-consequence skills (compliance-check, risk-limits, position-sizing) declare validation
+- Structural/mechanical skills (order-format, intent-parsing) don't
+- Aggregation nodes that integrate children declare integration-coherence validation
+- Leaf computation nodes rely on script assertions, not LLM validation
+
+This keeps validation latency proportional to domain risk. A routine trade through lightly-declared skills has minimal validation overhead. A complex trade through heavily-declared skills pays for the additional scrutiny.
+
+### Validation Parallelism
+
+When multiple validators are triggered at the same hook (a node with two `after_artifact_produced` validators, or the final node invoking three validators before shipping), they run in parallel via `task`. Latency is bounded by the slowest validator at any hook point, not the sum.
+
+### Model Diversity
+
+Validation skills should be invoked with a different model than the one that produced the artifact. Claude-validating-Claude misses shared failure modes. Pairing Opus in the main flow with Sonnet or GPT-5 for validation catches a broader class of issues. This is declared in the validation skill's own frontmatter:
+
+```yaml
+---
+name: _validation/sizing-coherence
+description: Validates that a sizing artifact aligns with its skill's guidance
+  and the inputs provided.
+preferred_model: openai:gpt-5.1  # different from main agent
+---
 ```
 
-Deep-tier gating creates natural friction against unbounded traversal and generates an audit trail: when the agent did go deep, the justification is recorded and reviewable.
+The harness respects `preferred_model` when spawning validation subagents.
 
------
+---
 
-## Runtime Validation
+## Artifact Flow
 
-The skill graph enables a validation layer that doesn’t exist in the single-SKILL.md world: **code verifies that the agent’s traversal was sound.**
+### Direct Injection to Parent
 
-### What the Validator Checks
+When a subagent returns, its artifact content is the task tool's return value — not a file path the parent needs to cat. The parent sees the artifact directly in its next turn and integrates it inline. This saves a turn per spawn and keeps integration flowing naturally.
 
-After the agent completes a workflow, the system has two artifacts: the workflow definition (which skills exist, which are mandatory, what the general flow is) and the execution trace (which skills the agent actually loaded and in what order). Validation diffs them:
+The artifact file still persists on disk (`/work/run_<id>/sub_<uuid>/output.md`) for audit, for downstream validation, and for memory of the run. But the parent's synchronous view is: call `task`, receive artifact content, integrate.
+
+This works because skill authoring produces bounded artifacts. A well-authored skill returns a structured finding in the hundreds or low thousands of tokens, not unbounded dumps. If a skill's output might be very large, the skill's prose should instruct the subagent to write to a file and return a summary with a reference to the full content.
+
+### Recursive Aggregation
+
+When a parent integrates multiple children's artifacts, the integration is itself a new artifact that the parent produces. That parent artifact is subject to the parent skill's own frontmatter — if the parent declares `after_artifact_produced` validation, the integration gets validated before it flows to the grandparent.
+
+Validation is thus recursive along the execution tree: every node's output artifact passes through its skill's declared validations before propagating up. Failures at any level trigger correction messages. The tree of artifacts becomes a tree of validated artifacts, bottom-up.
+
+### Auditability of Artifacts
+
+Every artifact produced at any node is captured in the trace with:
+
+- Node identity (which skill, which invocation instance)
+- Inputs received
+- Skill prose content at time of execution
+- Output artifact content
+- Mandatories satisfied (red-team, validation results)
+- Parent that received the artifact
+
+Post-hoc queries: "show me every artifact where validation flagged a concern," "show me red-team outputs for trades over $10M last quarter," "show me cases where the mandatory correction message triggered."
+
+---
+
+## Stack
+
+The implementation is built on LangChain v1 and deepagents, with deepagents providing enterprise infrastructure we would otherwise build ourselves.
+
+**What we use from deepagents:**
+
+- **CompositeBackend** — routes filesystem operations to different backends per path prefix. SharePoint for `/skills/`, OneDrive for `/memory/`, StateBackend for `/work/`, a sandbox for `/data/` and script execution.
+- **Filesystem tools** (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`) — wired through the composite backend. The agent reads SharePoint skills and OneDrive memory uniformly via paths.
+- **Sandbox backend with shell execution** — runs inside AWS AgentCore for production. Provides `execute` for running skill scripts.
+- **SubagentMiddleware** (`task` tool) — handles subagent spawning with isolated contexts and configurable models (supports model diversity for validation).
+- **LangGraph integration** — durable execution, streaming, LangSmith tracing with per-subagent `lc_agent_name` metadata.
+
+**What we write as a thin custom layer:**
+
+- **IndexMiddleware** — reads `skills/index.md` at startup, injects into system prompt.
+- **MandatoryMiddleware** — reads current skill's frontmatter, tracks satisfaction of mandatories, sends correction messages when unsatisfied mandatories would be bypassed.
+- **Navigate tool** — resolves wikilinks to skill paths, reads skill content through the composite backend for inline walks.
+- **Harness prompt** — teaches the three execution modes, mandatory traversal semantics, memory discipline, artifact flow.
+- **Audit queries** — post-hoc trace analysis for compliance and quality reporting.
+
+---
+
+## Enterprise Infrastructure
+
+### Storage via Composite Backend
 
 ```python
-def validate_execution(
-    workflow: Workflow,
-    trace: ExecutionTrace
-) -> ValidationResult:
+from deepagents.backends import CompositeBackend, StateBackend, SandboxBackend
+from library.backends.sharepoint import SharePointBackend
+from library.backends.onedrive import OneDriveBackend
 
-    # All [[links]] reachable from the workflow
-    reachable = workflow.get_all_linked_nodes()
-    # Nodes marked mandatory ("non-negotiable" etc)
-    mandatory = workflow.get_mandatory_nodes()
-    # What the agent actually visited
-    visited = set(trace.visited_nodes)
+backend_factory = lambda rt: CompositeBackend(
+    default=StateBackend(rt),       # per-run /work/
+    routes={
+        "/skills/": SharePointBackend(
+            site="awm-ai-strats",
+            library="Library-Skills",
+            read_only=True,
+        ),
+        "/memory/": OneDriveBackend(
+            site="awm-ai-strats",
+            library="Library-Memory",
+            mode="append_only",
+        ),
+        "/data/": SandboxBackend(runtime=agentcore),
+    },
+)
+```
 
-    errors = []
+Skills live in SharePoint with Git-to-SharePoint CI sync: authors edit markdown in Git, PRs are reviewed, merged PRs publish to SharePoint. The backend reads from SharePoint at runtime; writes are blocked.
 
-    # Must visit all mandatory nodes
-    missed = mandatory - visited
-    if missed:
-        errors.append(f"Skipped mandatory: {missed}")
+Memory lives in OneDrive under a shared library. Writes are append-only to avoid version explosion. Periodic maintenance agents consolidate and archive.
 
-    # Cannot visit nodes outside the graph
-    hallucinated = visited - reachable
-    if hallucinated:
-        errors.append(f"Out-of-graph nodes: {hallucinated}")
+Per-run ephemeral state (`/work/run_<id>/`) lives in LangGraph state. Scripts and shell execution happen in the AgentCore sandbox.
 
-    # Terminal output must exist
-    if not trace.has_terminal_output:
-        errors.append("No terminal output produced")
+### Shell Execution via AgentCore
 
-    return ValidationResult(
-        valid=len(errors) == 0,
-        errors=errors,
-        traversal_path=trace.ordered_path,
-        depth_reached=trace.max_depth,
-        skills_loaded=len(visited),
-        skills_available=len(reachable),
+AgentCore hosts the agent process and provides a shell sandbox with appropriate isolation, scaling, and lifecycle management. The sandbox backend's `execute` tool routes to AgentCore's shell runtime. Skill scripts execute in this sandbox with access to the composite filesystem view.
+
+---
+
+## The Custom Layer
+
+### MandatoryMiddleware
+
+```python
+from langchain.agents.middleware import AgentMiddleware, wrap_model_call, hook_config
+from langchain.agents.middleware.types import ModelRequest
+import yaml
+
+class MandatoryMiddleware(AgentMiddleware):
+    """Enforces frontmatter-declared mandatory skills.
+
+    Parses the current skill's frontmatter, tracks which mandatories
+    have been satisfied by inspecting task tool calls in the trace,
+    intercepts node termination or artifact production to ensure
+    mandatories ran, sends correction messages when they didn't.
+    """
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def _current_skill_path(self, state) -> str | None:
+        """Determine which skill the agent is currently executing."""
+        # Read from runtime context set when navigate() loads a skill
+        return state.get("current_skill_path")
+
+    def _parse_mandatories(self, skill_content: str) -> list[dict]:
+        """Extract mandatory declarations from skill frontmatter."""
+        if not skill_content.startswith("---"):
+            return []
+        _, frontmatter, _ = skill_content.split("---", 2)
+        meta = yaml.safe_load(frontmatter)
+        return meta.get("mandatory", [])
+
+    def _satisfied(self, mandatory: dict, trace: list) -> bool:
+        """Check whether this mandatory has a corresponding spawn in the trace."""
+        return any(
+            event["tool"] == "task"
+            and event["args"].get("skill") == mandatory["skill"]
+            for event in trace
+        )
+
+    @wrap_model_call
+    def enforce(self, request: ModelRequest, handler):
+        skill_path = self._current_skill_path(request.state)
+        if not skill_path:
+            return handler(request)
+
+        skill_content = self.backend.read(skill_path)
+        mandatories = self._parse_mandatories(skill_content)
+
+        if not mandatories:
+            return handler(request)
+
+        trace = request.state.get("trace", [])
+        unsatisfied = [m for m in mandatories if not self._satisfied(m, trace)]
+
+        if unsatisfied and self._agent_attempting_termination(request):
+            correction = self._build_correction_message(unsatisfied, skill_path)
+            request = request.override(
+                messages=request.messages + [{"role": "system", "content": correction}]
+            )
+
+        return handler(request)
+
+    def _build_correction_message(self, unsatisfied, skill_path):
+        lines = [f"You are executing {skill_path}."]
+        lines.append("The following mandatory skills must be invoked before concluding:")
+        for m in unsatisfied:
+            lines.append(f"- {m['skill']} (hook: {m['hook']}, inputs: {m['inputs']})")
+        lines.append("Invoke each via the task tool before producing your final output.")
+        return "\n".join(lines)
+```
+
+### Navigate Tool
+
+```python
+from langchain.tools import tool
+from langchain.tools.runtime import ToolRuntime
+
+@tool
+def navigate(wikilink: str, runtime: ToolRuntime) -> str:
+    """Follow a wikilink to load a skill's full content into your context.
+
+    Resolves [[position-sizing]] to /skills/position-sizing/SKILL.md
+    and returns the content. Also updates runtime context to reflect
+    which skill is currently being executed, enabling MandatoryMiddleware
+    to track mandatory satisfaction per node.
+
+    Use for inline graph walking. Use the task tool for isolation
+    (parallel children or complex sub-reasoning).
+    """
+    backend = runtime.context["backend"]
+    path = f"/skills/{wikilink}/SKILL.md"
+    try:
+        content = backend.read(path)
+        # Update runtime context so MandatoryMiddleware knows current skill
+        runtime.state_update["current_skill_path"] = path
+        return content
+    except FileNotFoundError:
+        return f"Error: skill '{wikilink}' not found in graph"
+```
+
+### Harness Prompt
+
+```python
+HARNESS_PROMPT = """
+You are an agent navigating a skill graph to complete a domain workflow.
+
+The skill graph is at /skills/, with entry point /skills/index.md
+(injected above). Individual skills are at /skills/<name>/SKILL.md
+and may have scripts in /skills/<name>/scripts/.
+
+Memory accumulates under /memory/ as markdown. Read relevant memory
+before reasoning at each node; append observations before returning.
+Use edit_file to append, never overwrite.
+
+Per-run working artifacts go under /work/run_<id>/.
+
+## Your tools
+
+- navigate(wikilink): Load a skill's full content into your current
+  context. Use this when walking the graph inline.
+- task(skill, task, inputs): Spawn a subagent for isolated work.
+- read_file, write_file, edit_file, ls, grep, glob: Filesystem.
+- execute: Run shell commands.
+
+## Execution modes
+
+### 1. Walk inline (default)
+Read the next skill via navigate(). Reason over it. Continue. Your
+context grows with the workflow; reasoning stays continuous.
+
+### 2. Parallel spawn
+When a skill's prose lists independent children, issue multiple
+task() calls in one turn. They run in parallel.
+
+### 3. Same-node self-spawn (context isolation)
+When the reasoning at a node is complex — intricate conditionals
+for your specific data, or your context is getting crowded —
+spawn a fresh instance of yourself via task() with the skill and
+a narrow sub-problem. Use sparingly.
+
+## Mandatory skills
+
+Some skills declare mandatory children in their frontmatter. These
+must be invoked regardless of your judgment. The harness will
+remind you if you try to conclude without satisfying them.
+
+Examples:
+- red-team at hook before_concluding: invoke before your final output
+- _validation/* at hook after_artifact_produced: invoke on your artifact
+
+When you see mandatories in the current skill's frontmatter, plan
+to invoke them. Don't wait for reminders.
+
+## Artifact flow
+
+When a subagent returns, you receive its artifact content directly
+in the task tool result. Integrate it into your reasoning. The full
+artifact persists on disk for audit.
+
+When you produce your own artifact, write it to your designated
+output path before concluding. The harness will run any
+after_artifact_produced mandatories automatically.
+
+## Memory discipline
+
+Before reasoning at a node, grep /memory/ for relevant pages. Read
+them. Before returning, append durable observations to the
+appropriate memory page — not intermediate reasoning, only
+attributable observations worth future retrieval.
+
+## Output
+
+Write your final answer to /work/run_<id>/answer.md. Say DONE.
+"""
+```
+
+### Agent Construction
+
+```python
+from deepagents import create_deep_agent
+
+def build_library_agent(desk: str, agentcore_runtime):
+    backend_factory = make_composite_backend(agentcore_runtime)
+
+    return create_deep_agent(
+        model="anthropic:claude-opus-4-7",
+        system_prompt=HARNESS_PROMPT + f"\n\nDesk: {desk}",
+        tools=[navigate] + domain_fetch_tools(desk),
+        middleware=[
+            IndexMiddleware(backend_factory),
+            MandatoryMiddleware(backend_factory),
+        ],
+        backend=backend_factory,
     )
 ```
 
-### What This Catches
-
-**Skipped mandatory nodes.** The agent sized a position and formatted an order but never ran compliance-check. The validator flags it before the order reaches the OMS. This is regulatory safety encoded as graph invariant.
-
-**Hallucinated nodes.** The agent claimed to consult a skill called “liquidity-forecast” that doesn’t exist in the graph. It invented a source of authority. The validator catches fabricated traversal.
-
-**Output sanity.** Domain-specific checks on the final output — notional is positive, lot count makes sense for the instrument, the rationale references concepts from skills the agent actually loaded.
-
-### Desk-Specific Validation Rules
-
-Different mandates impose different constraints without changing the skill files:
+### Invocation
 
 ```python
-DESK_CONSTRAINTS = {
-    "long-only-equity": {
-        "mandatory": {
-            "compliance-check",
-            "risk-limits",
-            "mandate-check"
-        },
-        "forbidden": {
-            "leverage-calc",
-            "short-locate"
-        },
-    },
-    "global-macro": {
-        "mandatory": {
-            "compliance-check",
-            "risk-limits",
-            "currency-hedge"
-        },
-        "forbidden": set(),
-    },
-}
+agent = build_library_agent(desk="long-only-equity", agentcore_runtime=rt)
+
+result = agent.invoke(
+    {"messages": [{"role": "user",
+                   "content": "Buy 100bps AAPL for the growth fund"}]},
+    config={"configurable": {"thread_id": run_id}},
+)
+
+# Mandatories ran automatically (red-team, validations)
+# Full trace in LangSmith with per-node attribution
+# Answer ready at /work/run_<run_id>/answer.md
 ```
 
-Same graph, same skills, different validation rules. The desk’s mandate defines what paths are legal. This separates concerns: skills encode *how*, validation rules encode *what’s allowed*, and the agent decides *what to do* within those bounds.
+---
 
-### Corrective Validation
+## Memory Maintenance
 
-Validation can be more than pass/fail. When the agent tries to finalize without visiting a mandatory node, the system can intervene:
+Three operations, same as before:
 
-```python
-def on_termination_attempt(trace, workflow, desk):
-    constraints = DESK_CONSTRAINTS[desk]
-    missed = constraints["mandatory"] - set(trace.visited_nodes)
+**Write-on-execute.** Every node appends durable observations before returning. Enforced by harness prompt.
 
-    if missed:
-        return InterventionResult(
-            allow_termination=False,
-            message=f"Cannot finalize: {missed} not yet visited. "
-                    f"These are mandatory for {desk}.",
-            inject_skills=missed,
-        )
+**Lint.** Scheduled maintenance agent runs against `/memory/` for contradictions, stale pages, orphans, dangling wikilinks. Uses the same harness pointed at a memory-lint skill.
 
-    return InterventionResult(allow_termination=True)
-```
-
-The agent is told to go back and consult the missing skills before it can produce a final output. The dynamism is preserved — the agent chose a path — but mandatory checkpoints are enforced by code.
-
------
-
-## General Skills Without Dependencies
-
-Skills like red-teaming, self-critique, summarization, and tone adjustment don’t participate in the domain graph. They don’t have provides/requires contracts. They don’t have wikilinks to position-sizing or risk-limits. They operate on *whatever the current context is*.
-
-These are **orchestrator-level policies**, not graph nodes:
-
-```python
-def execute_workflow(workflow, request, desk):
-    # Main agent traverses the skill graph
-    result = main_agent.execute(workflow, request)
-
-    # Validate traversal
-    validation = validate_execution(workflow, result.trace)
-
-    # Apply cross-cutting policies (not in the graph)
-    if result.notional > 10_000_000:
-        result = apply_skill("red-team-review", result)
-
-    if desk == "private-wealth":
-        result = apply_skill("pm-tone-adjustment", result)
-
-    return result
-```
-
-Clean separation: the graph handles domain workflows, policies handle cross-cutting concerns. Red-teaming doesn’t need graph connectivity because it’s not domain knowledge — it’s a reasoning pattern applied to domain outputs.
-
------
-
-## Context and Cache Efficiency
-
-### Progressive Context Growth
-
-The main agent’s context grows proportionally to request complexity:
-
-|Request             |Skills loaded|Depth|Skill tokens|
-|--------------------|-------------|-----|------------|
-|Buy 100bps AAPL     |8 of 14      |2    |~3,500      |
-|Japan-Korea rotation|12 of 14     |3    |~6,000      |
-|Simple FX forward   |5 of 14      |2    |~2,000      |
-
-The simple request doesn’t pay for the complex case’s context. This is the fundamental advantage over a monolithic SKILL.md where every request loads the full 15,000 tokens.
-
-### KV Cache Behavior
-
-The workflow skill and core atomic skills form a **stable prompt prefix** that’s identical across requests of the same type. What changes per request is which additional skills get loaded and the input data. This means the KV cache for the prefix is reusable across requests — you pay for the skill content once, and subsequent requests only recompute from the divergence point.
-
-Subagent prompts are even more cache-friendly: each subagent type (correlation-check worker, vol-regime worker) has a fixed prompt structure with only the data payload varying.
-
-### Subagents as Context Compressors
-
-When a skill is peripheral to the main reasoning thread, the main agent dispatches a subagent not for parallelism but for **context efficiency**. The subagent loads the full skill, reasons through it, and returns a one-sentence conclusion. The main agent gets the answer without the full skill content:
+**Propose skill edits.** When memory patterns become principles, maintenance agent opens PRs against the Git skills repo. Humans review and merge. CI deploys to SharePoint.
 
 ```
-Main agent dispatches: "Does Korea trip EM concentration?"
-Subagent loads concentration.md (500 tokens), reasons, returns:
-  "Under FTSE (mandate benchmark), Korea is DM. No EM flag."
-Main agent incorporates the 15-token answer, not the 500-token skill.
+Execution traces → Memory (append via subagents)
+                      ↓ scheduled lint + pattern detection
+                   Proposed skill edits (PR to Git)
+                      ↓ human review
+                   Skill graph updates (CI deploy to SharePoint)
 ```
 
-This keeps the main agent’s context lean while allowing arbitrary depth in the graph. The subagent’s context is discarded after returning.
+---
 
------
+## Auditability
 
-## System Design Summary
+Every action in the system produces a structured trace event:
+
+- Navigate calls (which wikilink, resolved to which skill)
+- Task spawns (parallel, self-spawn, mandatory)
+- Mandatory satisfactions (which mandatory, satisfied by which spawn)
+- Correction messages (when, why, what the agent did in response)
+- Artifacts produced (at which node, what content)
+- Validation results (which validator, pass/flag/fail, rationale)
+- Memory writes (which page, what observation)
+- Shell executions (which script, inputs, outputs)
+
+The trace is the substrate for:
+
+- Regulatory compliance reporting (did mandatories run, did validations pass)
+- Quality analysis (where did validators flag, what did they catch)
+- Skill improvement (which skills produce artifacts that fail validation often)
+- RL training (policy over navigation decisions, conditioned on outcomes)
+
+LangSmith provides the UI and query layer. Custom queries cover domain-specific audit questions.
+
+---
+
+## Tradeoffs
+
+**Fits:** multi-factor domain workflows with long-horizon reasoning, compliance requirements, and self-improvement goals.
+
+**Doesn't fit:** short single-skill procedures, high-throughput low-latency tasks, domains without meaningful decomposition.
+
+**Latency profile:** routine workflows through lightly-declared skills run fast (inline walk, one model, few mandatories). Complex workflows through heavily-declared skills pay for multiple parallel mandatories and validations. Latency is proportional to declared enforcement, not uniform.
+
+**The honest risks to monitor:**
+- Validators becoming rubber stamps if they pass everything — periodic adversarial audit of validator behavior
+- Mandatory correction loops on specific skills indicating prompt or skill authoring issues — traces surface these
+- Artifact bloat if skills produce unbounded outputs — authoring convention caught in lint
+
+---
+
+## Design Principles
+
+**Enterprise primitives off the shelf.** SharePoint, OneDrive, AgentCore via deepagents composite backend. We don't build auth, versioning, sandboxing.
+
+**Custom layer is thin.** Index middleware, mandatory middleware, navigate tool, harness prompt. The rest is deepagents and prose.
+
+**Three execution modes, runtime-judged.** Inline walk, parallel spawn, same-node self-spawn. Model picks per situation.
+
+**Mandatories unify enforcement.** Red-team, compliance, validation — same pattern, frontmatter-declared, one middleware enforces. New enforcement classes are declaration-only changes.
+
+**Prose carries model-judged routing. Frontmatter carries harness-enforced requirements.** Clean separation.
+
+**Artifacts flow directly from child to parent.** The task tool return is the artifact. Full content persists on disk.
+
+**Validation is selective and parallel.** Skills opt in via frontmatter. Multiple validators at the same hook run concurrently.
+
+**Model diversity for validation.** Validators use different models than the node being validated. Catches shared failure modes.
+
+**Skills evolve through human review. Memory evolves autonomously.** Git-reviewed PRs for skills, append-on-execute for memory.
+
+**Harness scales with model capability.** As models judge execution modes better and produce better artifacts, the system gets smarter without harness changes.
+
+**Every action is audit-traceable.** Structured trace events for navigation, spawning, mandatories, artifacts, validations, memory writes, shell execution.
+
+---
+
+## System
 
 ```
-┌──────────────────────────────────────────────┐
-│                  Skill Graph                  │
-│                                              │
-│  Workflow skills     Atomic skills           │
-│  (entry points)      (knowledge nodes)       │
-│                                              │
-│  trade-generation    position-sizing          │
-│  portfolio-rebal     vol-regime              │
-│  risk-report         risk-limits             │
-│                      correlation-check       │
-│  Prose with [[links]] connecting everything  │
-│  Tier annotations: core / reference / deep   │
-└──────────────┬───────────────────────────────┘
-               │
-               │ load_skill(name)
-               ▼
-┌──────────────────────────────────────────────┐
-│              Main Agent                       │
-│                                              │
-│  Continuous reasoning thread                 │
-│  Loads workflow, traverses [[links]]         │
-│  Follows prose guidance for depth            │
-│  Dispatches subagents for fan-out            │
-│  Accumulates context progressively           │
-│  Produces final output                       │
-└───────┬──────────────────┬───────────────────┘
-        │                  │
-        │ parallel         │ peripheral
-        │ branches         │ compression
-        ▼                  ▼
-┌──────────────┐   ┌──────────────┐
-│  Subagent A  │   │  Subagent C  │
-│  skill +     │   │  skill +     │
-│  data +      │   │  data +      │
-│  question    │   │  question    │
-│  → finding   │   │  → finding   │
-└──────────────┘   └──────────────┘
-┌──────────────┐
-│  Subagent B  │
-│  (parallel)  │
-│  → finding   │
-└──────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│              Validator                        │
-│                                              │
-│  ✓ Mandatory nodes visited                   │
-│  ✓ No hallucinated out-of-graph nodes        │
-│  ✓ Output sanity checks                      │
-│  ✓ Desk-specific constraint enforcement      │
-│  ✓ Depth justification audit trail           │
-│                                              │
-│  Records full traversal trace                │
-└──────────────────────────────────────────────┘
-        │
-        ▼
-┌──────────────────────────────────────────────┐
-│         Cross-Cutting Policies               │
-│                                              │
-│  Red-team review (if notional > threshold)   │
-│  PM tone adjustment (if private wealth)      │
-│  Audit logging                               │
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Enterprise Storage                                  │
+│                                                      │
+│  SharePoint              OneDrive                    │
+│  /skills/ (Git-synced)   /memory/ (append-only)      │
+│  ├── index.md            ├── index.md                │
+│  ├── trade-generation/   ├── correlations/           │
+│  ├── position-sizing/    ├── regimes/                │
+│  ├── red-team/           └── pm-patterns/            │
+│  └── _validation/                                    │
+└───────────────────┬──────────────────────────────────┘
+                    │
+                    │ CompositeBackend (deepagents)
+                    │ routes: /skills/ → SharePoint (RO)
+                    │         /memory/ → OneDrive (append)
+                    │         /data/   → AgentCore sandbox
+                    │         /work/   → StateBackend
+                    ▼
+┌──────────────────────────────────────────────────────┐
+│  Agent (create_deep_agent)                           │
+│                                                      │
+│  System prompt:                                      │
+│  ├── Harness (3 modes, mandatories, discipline)      │
+│  └── Skills index (IndexMiddleware)                  │
+│                                                      │
+│  Middleware:                                         │
+│  ├── IndexMiddleware                                 │
+│  └── MandatoryMiddleware                             │
+│                                                      │
+│  Tools:                                              │
+│  ├── navigate(wikilink) — inline graph walk          │
+│  ├── task(skill, task) — subagent spawn              │
+│  ├── read_file, write_file, edit_file, grep, glob    │
+│  ├── execute — shell in AgentCore                    │
+│  └── domain fetch tools                              │
+│                                                      │
+│  Runtime decisions per node:                         │
+│  • Walk inline / parallel spawn / self-spawn         │
+│  • Satisfy frontmatter-declared mandatories          │
+└────────────┬─────────────────────────────────────────┘
+             │
+             │ task() invokes:
+             │ • Parallel siblings (prose-declared)
+             │ • Self-spawn (context isolation)
+             │ • Mandatory skills (frontmatter-declared)
+             │   - red-team (before_concluding)
+             │   - validation (after_artifact_produced)
+             ▼
+┌──────────────────────────────────────────────────────┐
+│  Subagents (isolated context)                        │
+│                                                      │
+│  Fresh context with same tools                       │
+│  Different model for validators (model diversity)    │
+│  Can navigate, spawn, declare own mandatories        │
+│  Returns artifact directly to parent                 │
+└────────────┬─────────────────────────────────────────┘
+             │
+             ▼
+┌──────────────────────────────────────────────────────┐
+│  Trace + Audit                                       │
+│                                                      │
+│  Structured events: navigate, task, mandatory        │
+│    satisfy/correct, artifact produce, validate       │
+│    pass/flag/fail, memory write, shell execute       │
+│  LangSmith UI + per-agent lc_agent_name metadata     │
+│  AgentCore: shell execution logs                     │
+│  Queryable substrate for compliance, quality,        │
+│    skill improvement, RL training                    │
+└──────────────────────────────────────────────────────┘
 ```
-
-### Design Principles
-
-1. **One agent reasons, subagents assist.** The main agent owns the continuous reasoning thread. Subagents are parallel workers and context compressors, not independent reasoners.
-1. **Prose carries routing logic.** Wikilinks embedded in reasoning prose tell the agent when and why to traverse. No metadata edge types, no YAML dependency declarations. The natural language *is* the routing mechanism.
-1. **Depth is emergent, not configured.** The same entry point leads to shallow traversal for simple requests and deep traversal for complex ones. Depth is driven by request complexity interacting with skill prose, not by workflow branching logic.
-1. **Validation is structural, not semantic.** Code checks that mandatory nodes were visited and no hallucinated nodes appeared. It doesn’t evaluate the quality of the agent’s reasoning — it verifies the reasoning happened within the graph’s bounds.
-1. **Skills are authored by domain experts, not engineers.** A skill file reads as domain knowledge, not configuration. The quality of the prose directly determines system behavior. Skill authoring is a first-class discipline.
-1. **Cross-cutting concerns stay out of the graph.** Red-teaming, tone adjustment, and other general skills are orchestrator policies, not graph nodes. The graph is purely domain knowledge.
